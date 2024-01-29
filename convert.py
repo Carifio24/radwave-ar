@@ -1,8 +1,16 @@
-from os.path import extsep, join, splitext
+from math import cos, sin
+from os.path import join, splitext
 
 import pandas as pd
 import astropy.units as u
 from astropy.coordinates import Galactic, SkyCoord
+
+
+def lbd_to_xyz(l, b, d):
+    x = d * sin(l) * cos(b)
+    y = d * sin(l) * sin(b)
+    z = d * cos(l)
+    return x, y, z
 
 
 def convert_coordinates(df):
@@ -13,11 +21,23 @@ def convert_coordinates(df):
     coords = [SkyCoord(ra=ra * u.deg, dec=dec * u.deg).transform_to(Galactic) for ra, dec in ra_dec]
     ls = []
     bs = []
-    for coord in coords:
-        ls.append(coord.l.value)
-        bs.append(coord.b.value)
+    xs = []
+    ys = []
+    zs = []
+    for coord, d in zip(coords, df["d"]):
+        l = coord.l.to(u.rad).value
+        b = coord.b.to(u.rad).value
+        x, y, z = lbd_to_xyz(l, b, d)
+        ls.append(l)
+        bs.append(b)
+        xs.append(x)
+        ys.append(y)
+        zs.append(z)
     out["l"] = ls 
     out["b"] = bs 
+    out["x"] = xs
+    out["y"] = ys
+    out["z"] = zs
 
     return out
 
