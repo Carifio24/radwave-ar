@@ -20,6 +20,11 @@ for point in points:
     for coord in point:
         points_bytearray.extend(struct.pack('f', coord))
 
+timestamps = [0.1 * i for i in range(N_PHASES)]
+time_bytearray = bytearray()
+for time in timestamps:
+    time_bytearray.extend(struct.pack('f', time))
+
 prev_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
 forward_differences = { pt: [] for pt in range(N_POINTS) }
 for phase in range(N_PHASES):
@@ -30,11 +35,27 @@ for phase in range(N_PHASES):
         forward_differences[pt].append(tuple(x[pt] for x in diffs))
     prev_xyz = xyz
 
-timestamps = [0.1 * i for i in range(N_PHASES)]
+forward_diff_bytearrays = []
+for point in range(N_POINTS):
+    bytearr = bytearray()
+    for diff in forward_differences[point]:
+        for value in diff:
+            bytearr.extend(struct.pack('f', value))
+    forward_diff_bytearrays.append(bytearr)
+
+time_bin = "time.bin"
+time_buffer = Buffer(byteLength=len(time_bytearray), uri=time_bin)
+points_bin = "points.bin"
+points_buffer = Buffer(byteLength=len(points_bytearray), uri=points_bin)
+
+buffers = [time_buffer, points_buffer]
+for point, bytearr in enumerate(forward_diff_bytearrays):
+    buff = Buffer(byteLength=len(bytearr), uri=f"diffs_{point}.bin")
+    buffers.append(buff)
 
 gltf = GLTFModel(asset=Asset(version='2.0'),
                  scenes=[Scene(nodes=list(range(N_POINTS)))],
                  nodes=[Node(mesh=0) for _ in range(N_POINTS)],
                  meshes=[Mesh(primitives=[Primitive(attributes=Attributes(POSITION=0))])],
-                 buffers=[Buffer
+                 buffers=buffers,
         )
