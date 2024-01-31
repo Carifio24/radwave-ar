@@ -33,7 +33,7 @@ def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
         center[0] + radius * math.cos(phi) * math.sin(theta),
         center[1] + radius * math.sin(phi) * math.sin(theta),
         center[2] + radius * math.cos(theta)
-    ) for phi, theta in product(phis, nonpole_thetas)]
+    ) for theta, phi in product(nonpole_thetas, phis)]
     points = [(center[0], center[1], center[2] + radius)] + points + [(center[0], center[1], center[2] - radius)]
 
     # TODO: Make a cleaner way to handle "modular" aspect of rows
@@ -74,6 +74,9 @@ arr = bytearray()
 for point in points:
     for coord in point:
         arr.extend(struct.pack('f', coord))
+
+for p in points:
+    print(p)
 
 triangles_offset = len(arr)
 for triangle in triangles:
