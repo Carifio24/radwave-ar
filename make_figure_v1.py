@@ -27,7 +27,7 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 
 # theta is the azimuthal angle here. Sorry math folks
 def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
-    nonpole_thetas = [i * math.pi - math.pi / 2 for i in range(1, theta_resolution-1)]
+    nonpole_thetas = [i * math.pi / theta_resolution for i in range(1, theta_resolution-1)]
     phis = [i * 2 * math.pi / phi_resolution for i in range(phi_resolution)]
     points = [(
         center[0] + radius * math.cos(phi) * math.sin(theta),
@@ -64,6 +64,9 @@ theta_resolution = 5
 phi_resolution = 5
 points, triangles = sphere_mesh(center, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
 
+for t in triangles:
+    print(t)
+
 point_mins = [min([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
 point_maxes = [max([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
 
@@ -74,9 +77,6 @@ arr = bytearray()
 for point in points:
     for coord in point:
         arr.extend(struct.pack('f', coord))
-
-for p in points:
-    print(p)
 
 triangles_offset = len(arr)
 for triangle in triangles:
