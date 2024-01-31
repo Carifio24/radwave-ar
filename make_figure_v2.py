@@ -5,9 +5,9 @@ import pandas as pd
 import pyvista as pv
 from gltflib.gltf import GLTF
 from gltflib.gltf_resource import FileResource
-from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Primitive, \
+from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Scene, Attributes, Mesh, Buffer, \
-    Animation, AnimationSampler, Channel, Target
+    Animation, AnimationSampler, Channel, Target, Material
 import operator
 import struct
 
@@ -74,6 +74,7 @@ accessors = []
 nodes = []
 meshes = []
 file_resources = []
+materials = [Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1]))]
 
 # Create a sphere for each point at phase=0
 N_POINTS = initial_df.shape[0]
@@ -105,7 +106,7 @@ for index, point in enumerate(positions):
     accessors.append(positions_accessor)
     accessors.append(indices_accessor)
     file_resources.append(FileResource(bin, data=arr))
-    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=2*index), indices=2*index+1)]))
+    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=2*index), indices=2*index+1, material=0)]))
     nodes.append(Node(mesh=index))
 
 node_indices = [_ for _ in range(len(nodes))]
@@ -116,7 +117,8 @@ model = GLTFModel(
     meshes=meshes,
     buffers=buffers,
     bufferViews=buffer_views,
-    accessors=accessors
+    accessors=accessors,
+    materials=materials
 )
 gltf = GLTF(model=model, resources=file_resources)
 gltf.export(join(output_directory, "test.gltf"))
