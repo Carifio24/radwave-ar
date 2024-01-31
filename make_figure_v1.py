@@ -27,8 +27,8 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 
 # theta is the azimuthal angle here. Sorry math folks
 def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
-    nonpole_thetas = [i * 2 * math.pi / theta_resolution for i in range(1, theta_resolution-1)]
-    phis = [i * math.pi - math.pi / 2 for i in range(1, phi_resolution-1)]
+    nonpole_thetas = [i * math.pi - math.pi / 2 for i in range(1, theta_resolution-1)]
+    phis = [i * 2 * math.pi / phi_resolution for i in range(phi_resolution)]
     points = [(
         center[0] + radius * math.cos(phi) * math.sin(theta),
         center[1] + radius * math.sin(phi) * math.sin(theta),
@@ -64,6 +64,9 @@ theta_resolution = 5
 phi_resolution = 5
 points, triangles = sphere_mesh(center, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
 
+point_mins = [min([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
+point_maxes = [max([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
+
 output_directory = "out"
 
 N_POINTS = phi_resolution * (theta_resolution - 2) + 2
@@ -83,7 +86,7 @@ buffer_views = [
     BufferView(buffer=0, byteOffset=triangles_offset, byteLength=len(arr)-triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
 ]
 accessors = [
-    Accessor(bufferView=0, componentType=ComponentType.FLOAT.value, count=N_POINTS, type=AccessorType.VEC3.value),
+    Accessor(bufferView=0, componentType=ComponentType.FLOAT.value, count=N_POINTS, type=AccessorType.VEC3.value, min=point_mins, max=point_maxes),
     Accessor(bufferView=1, componentType=ComponentType.UNSIGNED_INT.value, count=len(triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[N_POINTS-1])
 ]
 file_resources = [FileResource("buf.bin", data=arr)]
