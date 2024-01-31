@@ -38,11 +38,11 @@ def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
 
     # TODO: Make a cleaner way to handle "modular" aspect of rows
     # Idea: Make column = column % phi_resolution in `sphere_mesh_index` ?
-    triangles = [(int(0), i, i + 1) for i in range(1, theta_resolution-1)]
+    triangles = [(int(0), i, i + 1) for i in range(1, phi_resolution)]
     tr, pr = theta_resolution, phi_resolution
     triangles.append((0, theta_resolution, 1))
     for row in range(1, theta_resolution - 2):
-        for col in range(phi_resolution - 1):
+        for col in range(phi_resolution):
             rc_index = sphere_mesh_index(row, col, tr, pr)
             triangles.append((rc_index, sphere_mesh_index(row+1, col, tr, pr), sphere_mesh_index(row+1, col-1, tr, pr)))
             triangles.append((rc_index, sphere_mesh_index(row, col+1, tr, pr), sphere_mesh_index(row+1, col, tr, pr)))
