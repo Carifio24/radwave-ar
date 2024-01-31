@@ -38,9 +38,9 @@ def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
 
     # TODO: Make a cleaner way to handle "modular" aspect of rows
     # Idea: Make column = column % phi_resolution in `sphere_mesh_index` ?
-    triangles = [(int(0), i, i + 1) for i in range(1, phi_resolution)]
+    triangles = [(int(0), i + 1, i) for i in range(1, phi_resolution)]
     tr, pr = theta_resolution, phi_resolution
-    triangles.append((0, theta_resolution, 1))
+    triangles.append((0, 1, theta_resolution))
     for row in range(1, theta_resolution - 2):
         for col in range(phi_resolution):
             rc_index = sphere_mesh_index(row, col, tr, pr)
@@ -60,12 +60,9 @@ def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
 
 center = (0, 0, 0)
 radius = 1
-theta_resolution = 5
-phi_resolution = 5
+theta_resolution = 70
+phi_resolution = 40
 points, triangles = sphere_mesh(center, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
-
-for t in triangles:
-    print(t)
 
 point_mins = [min([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
 point_maxes = [max([operator.itemgetter(i)(point) for point in points]) for i in range(3)]
