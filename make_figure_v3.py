@@ -93,7 +93,7 @@ meshes = []
 file_resources = []
 materials = [Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1]))]
 samplers = []
-animations = []
+channels = []
 
 # Set up some stuff that we'll need for the animations
 # In particular, set up out timestamp buffer/view/accessor
@@ -173,8 +173,10 @@ for index, point in enumerate(positions):
     target = Target(node=index, path="translation")
     sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
     samplers.append(sampler)
-    channel = Channel(target=target, sampler=0)
-    animations.append(Animation(channels=[channel], samplers=[sampler]))
+    channel = Channel(target=target, sampler=index)
+    channels.append(channel)
+    
+animation = Animation(channels=channels, samplers=samplers)
 
 # Finally, set up our model and export
 node_indices = [_ for _ in range(len(nodes))]
@@ -187,7 +189,7 @@ model = GLTFModel(
     bufferViews=buffer_views,
     accessors=accessors,
     materials=materials,
-    animations=animations
+    animations=[animation]
 )
 gltf = GLTF(model=model, resources=file_resources)
 gltf.export(join(output_directory, "v3.gltf"))
