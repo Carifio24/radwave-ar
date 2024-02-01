@@ -29,7 +29,7 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
 def get_translations():
-    forward_differences = { pt: [] for pt in range(N_PHASES) }
+    translations = { pt: [] for pt in range(N_PHASES) }
     initial_df = pd.read_csv(cluster_filepath(0))
     initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
     for phase in range(1, N_PHASES+1):
@@ -37,12 +37,14 @@ def get_translations():
         xyz = [df["x"], df["y"], df["z"]]
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
         for pt in range(df.shape[0]):
-            forward_differences[pt].append(tuple(x[pt] for x in diffs))
+            translations[pt].append(tuple(x[pt] for x in diffs))
 
-    return forward_differences
+    return translations
 
 
-# theta is the azimuthal angle here. Sorry math folks
+# theta is the azimuthal angle here. Sorry math folks.
+# This gives a straightforward "grid"-style triangulation of a sphere with the given center and radius,
+# with tunable resolutions in theta and phi.
 def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
     nonpole_thetas = [i * math.pi / theta_resolution for i in range(1, theta_resolution-1)]
     phis = [i * 2 * math.pi / phi_resolution for i in range(phi_resolution)]
