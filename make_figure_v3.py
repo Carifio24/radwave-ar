@@ -13,6 +13,7 @@ import struct
 
 N_PHASES = 270
 
+
 def cluster_filepath(phase):
     return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
 
@@ -25,8 +26,9 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     else:
         return phi_resolution * (row - 1) + column + 1
 
-
-def get_forward_differences():
+# Note that these need to be overall translations (i.e. x(t) - x(0))
+# NOT per-timestep translations (e.g. x(t) - x(t-dt))
+def get_translations():
     forward_differences = { pt: [] for pt in range(N_PHASES) }
     initial_df = pd.read_csv(cluster_filepath(0))
     initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
@@ -99,7 +101,7 @@ time_delta = 0.01
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 min_time = min(timestamps)
 max_time = max(timestamps)
-forward_diffs = get_forward_differences()
+translations = get_translations()
 time_barr = bytearray()
 for time in timestamps:
     time_barr.extend(struct.pack('f', time))
@@ -131,6 +133,8 @@ for index, point in enumerate(positions):
         for idx in triangle:
             arr.extend(struct.pack('I', idx))
 
+    # Set up the position and indices (triangulation) for this cluster
+    # The main thing here is to make sure that our indices to buffers/views/accessors are correct
     bin = f"buf_{index}.bin"
     buffer = Buffer(byteLength=len(arr), uri=bin)
     buffers.append(buffer)
@@ -146,7 +150,11 @@ for index, point in enumerate(positions):
     meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(buffer_views)-2), indices=len(buffer_views)-1, material=0)]))
     nodes.append(Node(mesh=index))
 
-    diffs = forward_diffs[index]
+    # Set up the buffer/view/accessor for the animation data for this point
+    # TODO: We definitely want separate BufferViews and Accessors for each point,
+    # but maybe all of the animation data could live in one buffer? And just use the correct offset.
+    # Would this even be any better?
+    diffs = translations[index]
     diff_bin = f"diff_{index}.bin"
     diff_barr = bytearray()
     for diff in diffs:
@@ -168,6 +176,7 @@ for index, point in enumerate(positions):
     channel = Channel(target=target, sampler=0)
     animations.append(Animation(channels=[channel], samplers=[sampler]))
 
+# Finally, set up our model and export
 node_indices = [_ for _ in range(len(nodes))]
 model = GLTFModel(
     asset=Asset(version='2.0'),
