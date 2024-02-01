@@ -95,7 +95,7 @@ animations = []
 
 # Set up some stuff that we'll need for the animations
 # In particular, set up out timestamp buffer/view/accessor
-time_delta = 0.05
+time_delta = 0.01
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 min_time = min(timestamps)
 max_time = max(timestamps)
