@@ -2,7 +2,6 @@ from itertools import product
 import math
 from os.path import join
 import pandas as pd
-import pyvista as pv
 from gltflib.gltf import GLTF
 from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, PBRMetallicRoughness, Primitive, \
@@ -18,6 +17,10 @@ def cluster_filepath(phase):
     return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
 
 
+def scale(value, lower, upper):
+    return (value - lower) / (upper - lower)
+
+
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     if row == 0:
         return 0
@@ -28,18 +31,31 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
-def get_translations():
+def get_scaled_positions_and_translations():
     translations = { pt: [] for pt in range(N_PHASES) }
     initial_df = pd.read_csv(cluster_filepath(0))
     initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
+    cmin = min([min(c) for c in initial_xyz])
+    cmax = max([max(c) for c in initial_xyz])
+    dfs = []
     for phase in range(1, N_PHASES+1):
         df = pd.read_csv(cluster_filepath(phase))
+        dfs.append(df)
         xyz = [df["x"], df["y"], df["z"]]
+        for coord in xyz:
+            cmin = min(cmin, min(coord))
+            cmax = max(cmax, max(coord))
+
+    initial_xyz = [scale(c, cmin, cmax) for i, c in enumerate(initial_xyz)]
+    for df in dfs:
+        xyz = [df["x"], df["y"], df["z"]]
+        xyz = [scale(c, cmin, cmax) for i, c in enumerate(xyz)]
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
         for pt in range(df.shape[0]):
             translations[pt].append(tuple(x[pt] for x in diffs))
-
-    return translations
+    
+    positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
+    return positions, translations
 
 
 # theta is the azimuthal angle here. Sorry math folks.
@@ -83,7 +99,8 @@ initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 
 # Let's set up our arrays and any constant values
-radius = 5
+N_POINTS = initial_df.shape[0]
+radius = 0.005
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -103,7 +120,7 @@ time_delta = 0.01
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 min_time = min(timestamps)
 max_time = max(timestamps)
-translations = get_translations()
+positions, translations = get_scaled_positions_and_translations()
 time_barr = bytearray()
 for time in timestamps:
     time_barr.extend(struct.pack('f', time))
@@ -118,8 +135,6 @@ buffer_views.append(time_buffer_view)
 accessors.append(time_accessor)
 
 # Create a sphere for each point at phase=0
-N_POINTS = initial_df.shape[0]
-positions = [tuple(initial_df[c][i] for c in ["x", "y", "z"]) for i in range(N_POINTS)]
 for index, point in enumerate(positions):
 
     points, triangles = sphere_mesh(point, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
