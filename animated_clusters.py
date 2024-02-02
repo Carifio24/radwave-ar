@@ -1,9 +1,7 @@
 from itertools import product
 import math
-from numpy import inf
 from os.path import join
 import pandas as pd
-import pyvista as pv
 from gltflib.gltf import GLTF
 from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, PBRMetallicRoughness, Primitive, \
