@@ -36,7 +36,9 @@ for index, point in enumerate(positions):
     extent_attr = sphere.GetExtentAttr()
     radius_attr = sphere.GetRadiusAttr()
 
+    radius_attr.Set(radius)
     bbox = bounding_box(point, radius)
+    extent_attr.Set(bbox)
 
 
 
