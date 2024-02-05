@@ -1,7 +1,7 @@
-from os.path import join
+from os.path import join, splitext
 from numpy import inf
 import pandas as pd
-from pxr import Gf, Usd, UsdGeom, Vt
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 
 from common import *
 
@@ -45,7 +45,17 @@ timestamps = [time_delta * i for i in range(1, N_PHASES)]
 point_positions = get_scaled_positions()
 
 # Set up the stage for our USD
-stage = Usd.Stage.CreateNew(join(output_directory, "radwave.usdc"))
+output_filename = "radwave.usdc"
+output_filepath = join(output_directory, output_filename)
+stage = Usd.Stage.CreateNew(output_filepath)
+
+material = UsdShade.Material.Define(stage, "/material")
+pbrShader = UsdShade.Shader.Define(stage, "/material/PBRShader")
+pbrShader.CreateIdAttr("UsdPreviewSurface")
+pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+pbrShader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((31 / 255, 60 / 255, 241 / 255))
+material.CreateSurfaceOutput().ConnectToSource(pbrShader.ConnectableAPI(), "surface")
 
 # Create a sphere for each point at phase=0
 for index in range(N_POINTS):
@@ -62,12 +72,13 @@ for index in range(N_POINTS):
     
     extent_attr = sphere.GetExtentAttr()
     radius_attr = sphere.GetRadiusAttr()
-    color_attr = sphere.GetDisplayColorAttr()
 
     radius_attr.Set(radius)
     bbox = bounding_box(initial_position, radius)
     extent_attr.Set(bbox)
-    color_attr.Set([(31 / 255, 60 / 255, 241 / 255)])
+
+    sphere.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+    UsdShade.MaterialBindingAPI(sphere).Bind(material)
 
     translation = sphere.AddTranslateOp()
     translation.Set(initial_position)
@@ -75,3 +86,10 @@ for index in range(N_POINTS):
         translation.Set(time=time, value=positions[i])
 
 stage.GetRootLayer().Save()
+
+# If we created a USDC file, also create a USDZ
+root, ext = splitext(output_filepath)
+if ext == ".usdc":
+    from subprocess import run
+    args = f"zip -0 {root}.usdz {root}.usdc".split(" ")
+    run(args, shell=False)
