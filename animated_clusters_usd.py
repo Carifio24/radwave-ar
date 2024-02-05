@@ -9,6 +9,7 @@ from common import *
 def bounding_box(center, radius):
     return Vt.Vec3fArray(2, (Gf.Vec3f(*[c - radius for c in center]), Gf.Vec3f(*[c + radius for c in center])))
 
+
 def get_scaled_positions():
     positions = { pt: [] for pt in range(N_PHASES) }
     cmin = inf
@@ -31,12 +32,15 @@ def get_scaled_positions():
 
     return positions
 
+
 output_directory = "out"
 
 initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 N_POINTS = initial_df.shape[0]
 radius = 0.005
+time_delta = 0.01
+timestamps = [time_delta * i for i in range(1, N_PHASES)]
 
 point_positions = get_scaled_positions()
 
@@ -64,5 +68,10 @@ for index in range(N_POINTS):
     bbox = bounding_box(initial_position, radius)
     extent_attr.Set(bbox)
     color_attr.Set([(31 / 255, 60 / 255, 241 / 255)])
+
+    translation = sphere.AddTranslateOp()
+    translation.set(initial_position)
+    for i, time in enumerate(timestamps):
+        translation.Set(time=time, value=positions[i])
 
 stage.GetRootLayer().Save()
