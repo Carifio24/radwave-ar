@@ -6,11 +6,7 @@ from common import *
 
 
 def bounding_box(center, radius):
-    return Vt.Vec3fArray(
-            2,
-            Gf.Vec3f(*[c - radius for c in center]),
-            Gf.Vec3f(*[c + radius for c in center])
-    )
+    return Vt.Vec3fArray(2, (Gf.Vec3f(*[c - radius for c in center]), Gf.Vec3f(*[c + radius for c in center])))
 
 
 output_directory = "out"
@@ -26,23 +22,23 @@ positions, translations = get_scaled_positions_and_translations()
 stage = Usd.Stage.CreateNew(join(output_directory, "radwave.usda"))
 
 # Create a sphere for each point at phase=0
-for index, point in enumerate(positions):
+for index, position in enumerate(positions):
 
     xform_key = f"/xform_{index}"
     xform = UsdGeom.Xform.Define(stage, xform_key)
     sphere_key = f"{xform_key}/sphere_{index}"
     sphere = UsdGeom.Sphere.Define(stage, sphere_key)
+
+    UsdGeom.XformCommonAPI(xform).SetTranslate(position)
     
     extent_attr = sphere.GetExtentAttr()
     radius_attr = sphere.GetRadiusAttr()
+    color_attr = sphere.GetDisplayColorAttr()
 
     radius_attr.Set(radius)
-    bbox = bounding_box(point, radius)
+    bbox = bounding_box(position, radius)
     extent_attr.Set(bbox)
+    color_attr.Set([(31 / 255, 60 / 255, 241 / 255)])
 
-
-
-# xform_prim = UsdGeom.Xform.Define(stage, "/xform")
-# sphere_prim = UsdGeom.Sphere.Define(stage, "/xform/sphere")
 
 stage.GetRootLayer().Save()
