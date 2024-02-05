@@ -39,7 +39,7 @@ initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 N_POINTS = initial_df.shape[0]
 radius = 0.005
-time_delta = 0.01
+time_delta = 0.1
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 
 point_positions = get_scaled_positions()
@@ -70,7 +70,7 @@ for index in range(N_POINTS):
     color_attr.Set([(31 / 255, 60 / 255, 241 / 255)])
 
     translation = sphere.AddTranslateOp()
-    translation.set(initial_position)
+    translation.Set(initial_position)
     for i, time in enumerate(timestamps):
         translation.Set(time=time, value=positions[i])
 
