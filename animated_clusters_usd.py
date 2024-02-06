@@ -3,7 +3,7 @@ from numpy import inf
 import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 
-from common import *
+from common import bring_into_clip, clip_linear_transformations, cluster_filepath, N_PHASES, N_POINTS
 
 
 def bounding_box(center, radius):
@@ -12,21 +12,22 @@ def bounding_box(center, radius):
 
 def get_scaled_positions():
     positions = { pt: [] for pt in range(N_PHASES) }
-    cmin = inf
-    cmax = -inf
+    cmins = [inf, inf, inf]
+    cmaxes = [-inf, -inf, -inf]
     dfs = []
     for phase in range(N_PHASES+1):
         df = pd.read_csv(cluster_filepath(phase))
         dfs.append(df)
         xyz = [df["x"], df["y"], df["z"]]
         for coord in xyz:
-            cmin = min(cmin, min(coord))
-            cmax = max(cmax, max(coord))
+            cmins[index] = min(cmins[index], min(coord))
+            cmaxes[index] = max(cmaxes[index], max(coord))
 
+    clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
     for phase in range(N_PHASES+1):
         df = dfs[phase]
         xyz = [df["x"], df["y"], df["z"]]
-        xyz = [scale(c, cmin, cmax) for c in xyz]
+        xyz = bring_into_clip(xyz, clip_transforms)
         for pt in range(df["x"].shape[0]):
             positions[pt].append(tuple(c[pt] for c in xyz))
 
