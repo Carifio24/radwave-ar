@@ -10,15 +10,7 @@ from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, PBR
 import operator
 import struct
 
-N_PHASES = 270
-
-
-def cluster_filepath(phase):
-    return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
-
-
-def scale(value, lower, upper):
-    return (value - lower) / (upper - lower)
+from common import N_PHASES, N_POINTS, bring_into_clip, cluster_filepath, clip_linear_transformations 
 
 
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
@@ -35,21 +27,22 @@ def get_scaled_positions_and_translations():
     translations = { pt: [] for pt in range(N_PHASES) }
     initial_df = pd.read_csv(cluster_filepath(0))
     initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
-    cmin = min([min(c) for c in initial_xyz])
-    cmax = max([max(c) for c in initial_xyz])
+    cmins = [min(c) for c in initial_xyz]
+    cmaxes = [max(c) for c in initial_xyz]
     dfs = []
     for phase in range(1, N_PHASES+1):
         df = pd.read_csv(cluster_filepath(phase))
         dfs.append(df)
         xyz = [df["x"], df["y"], df["z"]]
-        for coord in xyz:
-            cmin = min(cmin, min(coord))
-            cmax = max(cmax, max(coord))
+        for index, coord in enumerate(xyz):
+            cmins[index] = min(cmins[index], min(coord))
+            cmaxes[index] = max(cmaxes[index], max(coord))
 
-    initial_xyz = [scale(c, cmin, cmax) for i, c in enumerate(initial_xyz)]
+    clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
+    initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for df in dfs:
         xyz = [df["x"], df["y"], df["z"]]
-        xyz = [scale(c, cmin, cmax) for i, c in enumerate(xyz)]
+        xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
         for pt in range(df.shape[0]):
             translations[pt].append(tuple(x[pt] for x in diffs))
@@ -99,7 +92,6 @@ initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 
 # Let's set up our arrays and any constant values
-N_POINTS = initial_df.shape[0]
 radius = 0.005
 theta_resolution = 10
 phi_resolution = 15
@@ -209,5 +201,5 @@ model = GLTFModel(
     animations=[animation]
 )
 gltf = GLTF(model=model, resources=file_resources)
-gltf.export(join(output_directory, "v3.gltf"))
-gltf.export(join(output_directory, "v3.glb"))
+gltf.export(join(output_directory, "radwave.gltf"))
+gltf.export(join(output_directory, "radwave.glb"))
