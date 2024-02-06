@@ -1,4 +1,4 @@
-from os.path import join, splitext
+from os.path import extsep, join, splitext
 from numpy import inf
 import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
@@ -49,6 +49,10 @@ output_filename = "radwave.usdc"
 output_filepath = join(output_directory, output_filename)
 stage = Usd.Stage.CreateNew(output_filepath)
 
+default_prim = UsdGeom.Xform.Define(stage, "/world").GetPrim()
+stage.SetDefaultPrim(default_prim)
+UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+
 material = UsdShade.Material.Define(stage, "/material")
 pbrShader = UsdShade.Shader.Define(stage, "/material/PBRShader")
 pbrShader.CreateIdAttr("UsdPreviewSurface")
@@ -62,7 +66,7 @@ for index in range(N_POINTS):
 
     positions = point_positions[index]
 
-    xform_key = f"/xform_{index}"
+    xform_key = f"/world/xform_{index}"
     xform = UsdGeom.Xform.Define(stage, xform_key)
     sphere_key = f"{xform_key}/sphere_{index}"
     sphere = UsdGeom.Sphere.Define(stage, sphere_key)
@@ -87,9 +91,6 @@ for index in range(N_POINTS):
 
 stage.GetRootLayer().Save()
 
-# If we created a USDC file, also create a USDZ
-root, ext = splitext(output_filepath)
-if ext == ".usdc":
-    from subprocess import run
-    args = f"zip -0 {root}.usdz {root}.usdc".split(" ")
-    run(args, shell=False)
+# Create a USDA file as well
+path, _ = splitext(output_filepath)
+stage.GetRootLayer().Export(f"{path}{extsep}usda")
