@@ -19,7 +19,7 @@ def get_scaled_positions():
         df = pd.read_csv(cluster_filepath(phase))
         dfs.append(df)
         xyz = [df["x"], df["y"], df["z"]]
-        for coord in xyz:
+        for index, coord in enumerate(xyz):
             cmins[index] = min(cmins[index], min(coord))
             cmaxes[index] = max(cmaxes[index], max(coord))
 
