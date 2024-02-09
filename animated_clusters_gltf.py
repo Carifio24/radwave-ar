@@ -23,7 +23,7 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
-def get_scaled_positions_and_translations():
+def get_positions_and_translations(scale=True):
     translations = { pt: [] for pt in range(N_PHASES) }
     initial_df = pd.read_csv(cluster_filepath(0))
     initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
@@ -38,11 +38,13 @@ def get_scaled_positions_and_translations():
             cmins[index] = min(cmins[index], min(coord))
             cmaxes[index] = max(cmaxes[index], max(coord))
 
-    clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
-    initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
+    if scale:
+        clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
+        initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for df in dfs:
         xyz = [df["x"], df["y"], df["z"]]
-        xyz = bring_into_clip(xyz, clip_transforms)
+        if scale:
+            xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
         for pt in range(df.shape[0]):
             translations[pt].append(tuple(x[pt] for x in diffs))
@@ -112,7 +114,7 @@ time_delta = 0.01
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 min_time = min(timestamps)
 max_time = max(timestamps)
-positions, translations = get_scaled_positions_and_translations()
+positions, translations = get_positions_and_translations(scale=True)
 time_barr = bytearray()
 for time in timestamps:
     time_barr.extend(struct.pack('f', time))

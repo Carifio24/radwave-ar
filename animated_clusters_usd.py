@@ -10,7 +10,7 @@ def bounding_box(center, radius):
     return Vt.Vec3fArray(2, (Gf.Vec3f(*[c - radius for c in center]), Gf.Vec3f(*[c + radius for c in center])))
 
 
-def get_scaled_positions():
+def get_positions(scale=False):
     positions = { pt: [] for pt in range(N_PHASES) }
     cmins = [inf, inf, inf]
     cmaxes = [-inf, -inf, -inf]
@@ -23,11 +23,13 @@ def get_scaled_positions():
             cmins[index] = min(cmins[index], min(coord))
             cmaxes[index] = max(cmaxes[index], max(coord))
 
-    clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
+    if scale:
+        clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
     for phase in range(N_PHASES+1):
         df = dfs[phase]
         xyz = [df["x"], df["y"], df["z"]]
-        xyz = bring_into_clip(xyz, clip_transforms)
+        if scale:
+            xyz = bring_into_clip(xyz, clip_transforms)
         for pt in range(df["x"].shape[0]):
             positions[pt].append(tuple(c[pt] for c in xyz))
 
@@ -39,11 +41,11 @@ output_directory = "out"
 initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 N_POINTS = initial_df.shape[0]
-radius = 0.005
+radius = 0.01
 time_delta = 0.1
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 
-point_positions = get_scaled_positions()
+point_positions = get_positions(scale=False)
 
 # Set up the stage for our USD
 output_filename = "radwave.usdc"
