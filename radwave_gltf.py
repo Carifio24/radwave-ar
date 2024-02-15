@@ -1,0 +1,281 @@
+from itertools import product
+import math
+from os.path import join
+import pandas as pd
+from gltflib.gltf import GLTF
+from gltflib.gltf_resource import FileResource
+from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, PBRMetallicRoughness, Primitive, \
+    ComponentType, GLTFModel, Node, Scene, Attributes, Mesh, Buffer, \
+    Animation, AnimationSampler, Channel, Target, Material, PrimitiveMode
+import operator
+import struct
+
+from common import BEST_FIT_DOWNSAMPLED_FILEPATH, BEST_FIT_FILEPATH, N_PHASES, N_POINTS, bring_into_clip, cluster_filepath, clip_linear_transformations 
+
+
+def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
+    if row == 0:
+        return 0
+    elif row == theta_resolution - 1:
+        return (theta_resolution - 2) * phi_resolution + 1
+    else:
+        return phi_resolution * (row - 1) + column + 1
+
+# Note that these need to be overall translations (i.e. x(t) - x(0))
+# NOT per-timestep translations (e.g. x(t) - x(t-dt))
+def get_positions_and_translations(scale=True):
+    translations = { pt: [] for pt in range(N_POINTS) }
+    initial_df = pd.read_csv(cluster_filepath(0))
+    initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
+    cmins = [min(c) for c in initial_xyz]
+    cmaxes = [max(c) for c in initial_xyz]
+    dfs = []
+    for phase in range(1, N_PHASES+1):
+        df = pd.read_csv(cluster_filepath(phase))
+        dfs.append(df)
+        xyz = [df["x"], df["y"], df["z"]]
+        for index, coord in enumerate(xyz):
+            cmins[index] = min(cmins[index], min(coord))
+            cmaxes[index] = max(cmaxes[index], max(coord))
+
+    if scale:
+        clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
+        initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
+    for df in dfs:
+        xyz = [df["x"], df["y"], df["z"]]
+        if scale:
+            xyz = bring_into_clip(xyz, clip_transforms)
+        diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
+        for pt in range(df.shape[0]):
+            translations[pt].append(tuple(x[pt] for x in diffs))
+    
+    positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
+    return positions, translations
+
+
+def get_best_fit_positions_and_translations(scale=True, downsampled=False):
+    filename = BEST_FIT_DOWNSAMPLED_FILEPATH if downsampled else BEST_FIT_FILEPATH
+    best_fit_df = pd.read_csv(filename)
+    initial_phase = best_fit_df[best_fit_df["phase"] == 0]
+    initial_xyz = [initial_phase["x"], initial_phase["y"], initial_phase["z"]]
+    points_per_phase = initial_phase.shape[0]
+    translations = { pt: [] for pt in range(points_per_phase) }
+    cmins = [min(c) for c in initial_xyz]
+    cmaxes = [max(c) for c in initial_xyz]
+    
+    if scale:
+        clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
+        initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
+    for phase in range(1, N_PHASES+1):
+        phase = best_fit_df[best_fit_df["phase"] == phase]
+        xyz = [phase["x"], phase["y"], phase["z"]]
+        if scale:
+            xyz = bring_into_clip(xyz, clip_transforms)
+        diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
+        for pt in range(phase.shape[0]):
+            translations[pt].append(tuple(x[pt] for x in diffs))
+
+    positions = [tuple(c[i] for c in initial_xyz) for i in range(points_per_phase)]
+    return positions, translations
+
+
+# theta is the azimuthal angle here. Sorry math folks.
+# This gives a straightforward "grid"-style triangulation of a sphere with the given center and radius,
+# with tunable resolutions in theta and phi.
+def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
+    nonpole_thetas = [i * math.pi / theta_resolution for i in range(1, theta_resolution-1)]
+    phis = [i * 2 * math.pi / phi_resolution for i in range(phi_resolution)]
+    points = [(
+        center[0] + radius * math.cos(phi) * math.sin(theta),
+        center[1] + radius * math.sin(phi) * math.sin(theta),
+        center[2] + radius * math.cos(theta)
+    ) for theta, phi in product(nonpole_thetas, phis)]
+    points = [(center[0], center[1], center[2] + radius)] + points + [(center[0], center[1], center[2] - radius)]
+
+    # TODO: Make a cleaner way to handle "modular" aspect of rows
+    # Idea: Make column = column % phi_resolution in `sphere_mesh_index` ?
+    triangles = [(int(0), i + 1, i) for i in range(1, phi_resolution)]
+    tr, pr = theta_resolution, phi_resolution
+    triangles.append((0, 1, theta_resolution))
+    for row in range(1, theta_resolution - 2):
+        for col in range(phi_resolution):
+            rc_index = sphere_mesh_index(row, col, tr, pr)
+            triangles.append((rc_index, sphere_mesh_index(row+1, col, tr, pr), sphere_mesh_index(row+1, col-1, tr, pr)))
+            triangles.append((rc_index, sphere_mesh_index(row, col+1, tr, pr), sphere_mesh_index(row+1, col, tr, pr)))
+        triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row+1, pr-1, tr, pr), sphere_mesh_index(row+1, pr-2, tr, pr)))
+        triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row, 0, tr, pr), sphere_mesh_index(row+1, pr-1, tr, pr)))
+        
+    row = theta_resolution - 2
+    last_index = sphere_mesh_index(theta_resolution - 1, 0, tr, pr)
+    for col in range(phi_resolution-1):
+        triangles.append((sphere_mesh_index(row, col, tr, pr), sphere_mesh_index(row, col+1, tr, pr), last_index))
+    triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row, 0, tr, pr), last_index))
+
+    return points, triangles
+
+
+
+output_directory = "out"
+
+initial_filepath = cluster_filepath(0)
+initial_df = pd.read_csv(initial_filepath)
+
+# Let's set up our arrays and any constant values
+radius = 0.005
+theta_resolution = 10
+phi_resolution = 15
+POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
+buffers = []
+buffer_views = []
+accessors = []
+nodes = []
+meshes = []
+file_resources = []
+materials = [Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1]))]
+samplers = []
+channels = []
+
+# Set up some stuff that we'll need for the animations
+# In particular, set up out timestamp buffer/view/accessor
+time_delta = 0.01
+timestamps = [time_delta * i for i in range(1, N_PHASES)]
+min_time = min(timestamps)
+max_time = max(timestamps)
+
+scale = True
+positions, translations = get_positions_and_translations(scale=scale)
+best_fit_positions, best_fit_translations = get_best_fit_positions_and_translations(scale=scale)
+time_barr = bytearray()
+for time in timestamps:
+    time_barr.extend(struct.pack('f', time))
+time_bin = "time.bin"
+file_resources.append(FileResource(time_bin, data=time_barr))
+time_buffer = Buffer(byteLength=len(time_barr), uri=time_bin)
+time_buffer_view = BufferView(buffer=0, byteLength=len(time_barr))
+time_accessor = Accessor(bufferView=0, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
+                         type=AccessorType.SCALAR.value, min=[min_time], max=[max_time])
+buffers.append(time_buffer)
+buffer_views.append(time_buffer_view)
+accessors.append(time_accessor)
+
+# Create the best-fit line
+# Since we want to render this as a single line, we want to set this up all together
+bf_bin = "best_fit.bin"
+bf_arr = bytearray()
+for pos in best_fit_positions:
+    for coord in pos:
+        bf_arr.extend(struct.pack('f', coord))
+bf_buffer = Buffer(byteLength=len(bf_arr), uri=bf_bin)
+buffers.append(bf_buffer)
+bf_view = BufferView(buffer=len(buffers)-1, byteLength=len(bf_arr), target=BufferTarget.ARRAY_BUFFER.value)
+buffer_views.append(bf_view)
+
+bf_mins = [min([operator.itemgetter(i)(pos) for pos in best_fit_positions]) for i in range(3)]
+bf_maxes = [max([operator.itemgetter(i)(pos) for pos in best_fit_positions]) for i in range(3)]
+bf_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(best_fit_positions),
+                       type=AccessorType.VEC3.value, min=bf_mins, max=bf_maxes)
+accessors.append(bf_accessor)
+file_resources.append(FileResource(bf_bin, data=bf_arr))
+meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(buffer_views)-1), mode=PrimitiveMode.LINES.value)]))
+nodes.append(Node(mesh=len(meshes)-1))
+
+# Create a sphere for each point at phase=0
+for index, point in enumerate(positions):
+
+    points, triangles = sphere_mesh(point, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
+    point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
+    point_maxes = [max([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
+
+    arr = bytearray()
+    for point in points:
+        for coord in point:
+            arr.extend(struct.pack('f', coord))
+    triangles_offset = len(arr)
+    for triangle in triangles:
+        for idx in triangle:
+            arr.extend(struct.pack('I', idx))
+
+    # Set up the position and indices (triangulation) for this cluster
+    # The main thing here is to make sure that our indices to buffers/views/accessors are correct
+    bin = f"buf_{index}.bin"
+    buffer = Buffer(byteLength=len(arr), uri=bin)
+    buffers.append(buffer)
+    positions_view = BufferView(buffer=len(buffers)-1, byteLength=triangles_offset, target=BufferTarget.ARRAY_BUFFER.value)
+    indices_view = BufferView(buffer=len(buffers)-1, byteLength=len(arr)-triangles_offset, byteOffset=triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
+    buffer_views.append(positions_view)
+    buffer_views.append(indices_view)
+    positions_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.FLOAT.value, count=POINTS_PER_SPHERE, type=AccessorType.VEC3.value, min=point_mins, max=point_maxes)
+    indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.UNSIGNED_INT.value, count=len(triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[POINTS_PER_SPHERE-1])
+    accessors.append(positions_accessor)
+    accessors.append(indices_accessor)
+    file_resources.append(FileResource(bin, data=arr))
+    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(buffer_views)-2), indices=len(buffer_views)-1, material=0)]))
+    nodes.append(Node(mesh=len(meshes)-1))
+
+    # Set up the buffer/view/accessor for the animation data for this point
+    # TODO: We definitely want separate BufferViews and Accessors for each point,
+    # but maybe all of the animation data could live in one buffer? And just use the correct offset.
+    # Would this even be any better?
+    diffs = translations[index]
+    diff_bin = f"diff_{index}.bin"
+    diff_barr = bytearray()
+    for diff in diffs:
+        for value in diff:
+            diff_barr.extend(struct.pack('f', value))
+    file_resources.append(FileResource(diff_bin, data=diff_barr))
+    diff_buffer = Buffer(byteLength=len(diff_barr), uri=diff_bin)
+    buffers.append(diff_buffer)
+    diff_buffer_view = BufferView(buffer=len(buffers)-1, byteLength=len(diff_barr))
+    buffer_views.append(diff_buffer_view)
+    diff_mins = [min([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
+    diff_maxes = [max([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
+    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
+                             type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
+    accessors.append(diff_accessor)
+    target = Target(node=len(nodes)-1, path="translation")
+    sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
+    samplers.append(sampler)
+    channel = Channel(target=target, sampler=len(samplers)-1)
+    channels.append(channel)
+
+    # Set up best-fit animations
+    # bf_diffs = best_fit_translations[index]
+    # bf_diff_bin = f"diff_bf_{index}.bin"
+    # bf_diff_barr = bytearray()
+    # for diff in bf_diffs:
+    #     for value in diff:
+    #         bf_diff_barr.extend(struct.pack('f', value))
+    # file_resources.append(FileResource(bf_diff_bin, data=bf_diff_barr))
+    # bf_diff_buffer = Buffer(byteLength=len(bf_diff_barr), uri=bf_diff_bin)
+    # buffers.append(bf_diff_buffer)
+    # bf_diff_bufview = BufferView(buffer=len(buffers)-1, byteLength=len(bf_diff_barr))
+    # buffer_views.append(bf_diff_bufview)
+    # bf_diff_mins = [min([operator.itemgetter(i)(diff) for diff in bf_diffs]) for i in range(3)]
+    # bf_diff_maxes = [max([operator.itemgetter(i)(diff) for diff in bf_diffs]) for i in range(3)]
+    # bf_diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
+    #                             type=AccessorType.VEC3.value, min=bf_diff_mins, max=bf_diff_maxes)
+    # accessors.append(bf_diff_accessor)
+    # target = Target(node=0, path="translation")
+    # sampler = AnimationSampler(input=1, interpolation="LINEAR", output=len(accessors)-1)
+    # samplers.append(sampler)
+    # channel = Channel(target=target, sampler=len(samplers)-1)
+    # channels.append(channel)
+    
+animation = Animation(channels=channels, samplers=samplers)
+
+# Finally, set up our model and export
+node_indices = [_ for _ in range(len(nodes))]
+model = GLTFModel(
+    asset=Asset(version='2.0'),
+    scenes=[Scene(nodes=node_indices)],
+    nodes=nodes,
+    meshes=meshes,
+    buffers=buffers,
+    bufferViews=buffer_views,
+    accessors=accessors,
+    materials=materials,
+    animations=[animation]
+)
+gltf = GLTF(model=model, resources=file_resources)
+gltf.export(join(output_directory, "radwave.gltf"))
+gltf.export(join(output_directory, "radwave.glb"))
