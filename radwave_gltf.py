@@ -53,30 +53,83 @@ def get_positions_and_translations(scale=True):
     return positions, translations
 
 
-def get_best_fit_positions_and_translations(scale=True, downsampled=False):
+# Find the midpoint of the line segment joining two points in 3d
+# The points are represented as length-3 tuples
+def midpoint(p0, p1):
+    return tuple(0.5 * (c0 + c1) for c0, c1 in zip(p0, p1))
+
+
+def vector(frm, to):
+    return tuple(t - f for f, t in zip(frm, to))
+
+
+def norm(v):
+    return math.sqrt(sum(c ** 2 for c in v))
+
+
+def dot(u, v):
+    return sum(uc * vc for uc, vc in zip(u, v))
+
+
+def cross(u, v):
+    return (
+        u[1] * v[2] - u[2] * v[1],
+        u[0] * v[2] - u[2] * v[0],
+        u[0] * v[1] - u[1] * v[0]
+    )
+
+
+# This function gives the transformations necessary to take the line segment (u0, v0) to (u1, v1)
+# Here u0, v0, etc. are 3d points
+# which we'll represent as length-3 tuples
+def line_segment_trs(u0, v0, u1, v1):
+    mid0 = midpoint(u0, v0)
+    mid1 = midpoint(u1, v1)
+    r0 = vector(u0, v0)
+    r1 = vector(u1, v1)
+
+    translation = vector(mid0, mid1)
+    l0 = norm(r0)
+    l1 = norm(r1)
+    scale = l1 / l0
+
+    # We represent the rotation as a quaternion, since that's what glTF wants
+    quat_scalar = l0 * l1 + dot(r0, r1)
+    quat_vector = cross(r0, r1)
+    quat = list(quat_vector) + [quat_scalar]
+    quat_norm = norm(quat)
+    rotation = [c / quat_norm for c in quat]
+
+    return translation, rotation, scale
+
+
+def get_best_fit_line_segments_and_transforms(scale=True, downsampled=False):
     filename = BEST_FIT_DOWNSAMPLED_FILEPATH if downsampled else BEST_FIT_FILEPATH
     best_fit_df = pd.read_csv(filename)
     initial_phase = best_fit_df[best_fit_df["phase"] == 0]
     initial_xyz = [initial_phase["x"], initial_phase["y"], initial_phase["z"]]
     points_per_phase = initial_phase.shape[0]
-    translations = { pt: [] for pt in range(points_per_phase) }
+    n_segments = points_per_phase - 1  # The number of line segments will be 1 less than the number of points
     cmins = [min(c) for c in initial_xyz]
     cmaxes = [max(c) for c in initial_xyz]
-    
+    segments = [[[c[i] for c in initial_xyz], [c[i+1] for c in initial_xyz]] for i in range(n_segments)]
+
     if scale:
         clip_transforms = clip_linear_transformations(list(zip(cmins, cmaxes)))
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
+
+    transforms = { seg: [] for seg in range(n_segments) }
     for phase in range(1, N_PHASES+1):
         phase = best_fit_df[best_fit_df["phase"] == phase]
         xyz = [phase["x"], phase["y"], phase["z"]]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
-        diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
-        for pt in range(phase.shape[0]):
-            translations[pt].append(tuple(x[pt] for x in diffs))
+        phase_segments = [[[c[i] for c in xyz], [c[i+1] for c in xyz]] for i in range(n_segments)]
+        for seg in range(n_segments):
+            t, r, s = line_segment_trs(*segments[seg], *phase_segments[seg])
+            transforms[seg].append((t, r, s))
 
-    positions = [tuple(c[i] for c in initial_xyz) for i in range(points_per_phase)]
-    return positions, translations
+    return segments, transforms
 
 
 # theta is the azimuthal angle here. Sorry math folks.
@@ -158,26 +211,6 @@ buffers.append(time_buffer)
 buffer_views.append(time_buffer_view)
 accessors.append(time_accessor)
 
-# Create the best-fit line
-# Since we want to render this as a single line, we want to set this up all together
-bf_bin = "best_fit.bin"
-bf_arr = bytearray()
-for pos in best_fit_positions:
-    for coord in pos:
-        bf_arr.extend(struct.pack('f', coord))
-bf_buffer = Buffer(byteLength=len(bf_arr), uri=bf_bin)
-buffers.append(bf_buffer)
-bf_view = BufferView(buffer=len(buffers)-1, byteLength=len(bf_arr), target=BufferTarget.ARRAY_BUFFER.value)
-buffer_views.append(bf_view)
-
-bf_mins = [min([operator.itemgetter(i)(pos) for pos in best_fit_positions]) for i in range(3)]
-bf_maxes = [max([operator.itemgetter(i)(pos) for pos in best_fit_positions]) for i in range(3)]
-bf_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(best_fit_positions),
-                       type=AccessorType.VEC3.value, min=bf_mins, max=bf_maxes)
-accessors.append(bf_accessor)
-file_resources.append(FileResource(bf_bin, data=bf_arr))
-meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(buffer_views)-1), mode=PrimitiveMode.LINES.value)]))
-nodes.append(Node(mesh=len(meshes)-1))
 
 # Create a sphere for each point at phase=0
 for index, point in enumerate(positions):
@@ -238,29 +271,6 @@ for index, point in enumerate(positions):
     channel = Channel(target=target, sampler=len(samplers)-1)
     channels.append(channel)
 
-    # Set up best-fit animations
-    # bf_diffs = best_fit_translations[index]
-    # bf_diff_bin = f"diff_bf_{index}.bin"
-    # bf_diff_barr = bytearray()
-    # for diff in bf_diffs:
-    #     for value in diff:
-    #         bf_diff_barr.extend(struct.pack('f', value))
-    # file_resources.append(FileResource(bf_diff_bin, data=bf_diff_barr))
-    # bf_diff_buffer = Buffer(byteLength=len(bf_diff_barr), uri=bf_diff_bin)
-    # buffers.append(bf_diff_buffer)
-    # bf_diff_bufview = BufferView(buffer=len(buffers)-1, byteLength=len(bf_diff_barr))
-    # buffer_views.append(bf_diff_bufview)
-    # bf_diff_mins = [min([operator.itemgetter(i)(diff) for diff in bf_diffs]) for i in range(3)]
-    # bf_diff_maxes = [max([operator.itemgetter(i)(diff) for diff in bf_diffs]) for i in range(3)]
-    # bf_diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
-    #                             type=AccessorType.VEC3.value, min=bf_diff_mins, max=bf_diff_maxes)
-    # accessors.append(bf_diff_accessor)
-    # target = Target(node=0, path="translation")
-    # sampler = AnimationSampler(input=1, interpolation="LINEAR", output=len(accessors)-1)
-    # samplers.append(sampler)
-    # channel = Channel(target=target, sampler=len(samplers)-1)
-    # channels.append(channel)
-    
 animation = Animation(channels=channels, samplers=samplers)
 
 # Finally, set up our model and export
