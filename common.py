@@ -15,6 +15,10 @@ def cluster_filepath(phase):
     return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
 
 
+BEST_FIT_FILEPATH = join("data", "RW_best_fit_oscillation_phase.csv")
+BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", "RW_best_fit_oscillation_phase_downsampled.csv")
+
+
 initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 N_POINTS = initial_df.shape[0]
