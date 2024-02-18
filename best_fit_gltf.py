@@ -14,6 +14,7 @@ import struct
 from common import N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, cluster_filepath, clip_linear_transformations 
 
 BEST_FIT_PATH = BEST_FIT_FILEPATH
+SCALE = False 
 
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     if row == 0:
@@ -56,7 +57,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for phase in range(1, N_PHASES + 1):
         df = pd.read_csv(cluster_filepath(phase))
-        xyz = [df["x"], df["y"], df["z"]]
+        xyz = [df[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -79,7 +80,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for phase in range(1, N_PHASES + 1):
         slice = df[df["phase"] == phase]
-        xyz = [slice["x"], slice["y"], slice["z"]]
+        xyz = [slice[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -131,7 +132,7 @@ initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 
 # Let's set up our arrays and any constant values
-radius = 0.005
+radius = 0.005 if SCALE else 5
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -158,7 +159,7 @@ min_time = min(timestamps)
 max_time = max(timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
-positions, translations = get_positions_and_translations(scale=True, clip_transforms=clip_transforms)
+positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 time_barr = bytearray()
 for time in timestamps:
     time_barr.extend(struct.pack('f', time))
@@ -228,13 +229,13 @@ for index, point in enumerate(positions):
     target = Target(node=index, path="translation")
     sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
     animation_samplers.append(sampler)
-    channel = Channel(target=target, sampler=index)
+    channel = Channel(target=target, sampler=len(animation_samplers)-1)
     channels.append(channel)
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.001
-bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=True, clip_transforms=clip_transforms)
+best_fit_radius = 0.001 if SCALE else 10
+bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 for index, point in enumerate(bf_positions):
     points, triangles = sphere_mesh(point, best_fit_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
@@ -288,7 +289,7 @@ for index, point in enumerate(bf_positions):
     target = Target(node=index + N_POINTS, path="translation")
     sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
     animation_samplers.append(sampler)
-    channel = Channel(target=target, sampler=index)
+    channel = Channel(target=target, sampler=len(animation_samplers)-1)
     channels.append(channel)
 
 animation = Animation(channels=channels, samplers=animation_samplers)
@@ -296,12 +297,18 @@ animation = Animation(channels=channels, samplers=animation_samplers)
 # Finally, let's create the galaxy texture
 galaxy_square_side = 30_000 * math.sqrt(2)
 galaxy_points = [
-    [galaxy_square_side, galaxy_square_side, 0],
-    [galaxy_square_side, -galaxy_square_side, 0],
-    [-galaxy_square_side, -galaxy_square_side, 0],
-    [-galaxy_square_side, galaxy_square_side, 0]
+    [galaxy_square_side, 0, galaxy_square_side],
+    [galaxy_square_side, 0, -galaxy_square_side],
+    [-galaxy_square_side, 0, -galaxy_square_side],
+    [-galaxy_square_side, 0, galaxy_square_side]
 ]
 galaxy_triangles= [[0, 1, 2], [2, 3, 0]]
+galaxy_texcoords = [
+    [1.0, 1.0],
+    [1.0, 0.0],
+    [0.0, 0.0],
+    [0.0, 1.0]
+]
 galaxy_image_path = join("images", "milkywaybar.jpg")
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
@@ -319,20 +326,28 @@ galaxy_triangles_offset = len(galaxy_barr)
 for triangle in galaxy_triangles:
     for idx in triangle:
         galaxy_barr.extend(struct.pack('I', idx))
+galaxy_texcoords_offset = len(galaxy_barr)
+for vertex in galaxy_texcoords:
+    for coord in vertex:
+        galaxy_barr.extend(struct.pack('f', coord))
 
 galaxy_bin = "galaxy.bin"
 galaxy_buffer = Buffer(byteLength=len(galaxy_barr), uri=galaxy_bin)
 buffers.append(galaxy_buffer)
 galaxy_positions_view = BufferView(buffer=len(buffers)-1, byteLength=galaxy_triangles_offset, target=BufferTarget.ARRAY_BUFFER.value)
-galaxy_indices_view = BufferView(buffer=len(buffers)-1, byteLength=len(galaxy_barr)-galaxy_triangles_offset, byteOffset=galaxy_triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
+galaxy_indices_view = BufferView(buffer=len(buffers)-1, byteLength=galaxy_texcoords_offset-galaxy_triangles_offset, byteOffset=galaxy_triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
+galaxy_texcoords_view = BufferView(buffer=len(buffers)-1, byteLength=len(galaxy_barr)-galaxy_texcoords_offset, byteOffset=galaxy_texcoords_offset, target=BufferTarget.ARRAY_BUFFER.value)
 buffer_views.append(galaxy_positions_view)
 buffer_views.append(galaxy_indices_view)
-galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
-galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
+buffer_views.append(galaxy_texcoords_view)
+galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
+galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
+galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=[0,0], max=[1,1])
 accessors.append(galaxy_positions_accessor)
 accessors.append(galaxy_indices_accessor)
+accessors.append(galaxy_texcoords_accessor)
 file_resources.append(FileResource(galaxy_bin, data=galaxy_barr))
-meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(buffer_views)-2), indices=len(buffer_views)-1, material=len(materials)-1)]))
+meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-3, TEXCOORD_0=len(accessors)-1), indices=len(accessors)-2, material=len(materials)-1)]))
 nodes.append(Node(mesh=len(meshes)-1))
 
 # Finally, set up our model and export
