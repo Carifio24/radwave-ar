@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
-    "N_PHASES", "cluster_filepath", "scale"
+    "N_VISIBLE_PHASES", "N_PHASES", "clip_linear_transformations", "cluster_filepath", "scale"
 ]
 
-N_PHASES = 270
+N_VISIBLE_PHASES = 270
+N_PHASES = 720
 output_directory = "out"
 
 

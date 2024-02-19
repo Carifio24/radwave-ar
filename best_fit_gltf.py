@@ -6,12 +6,12 @@ from gltflib.gltf import GLTF
 from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Image, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Sampler, Scene, Attributes, Mesh, Buffer, \
-    Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo 
+    Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo, interpolation 
 from numpy import inf
 import operator
 import struct
 
-from common import N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, cluster_filepath, clip_linear_transformations 
+from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, cluster_filepath, clip_linear_transformations 
 
 BEST_FIT_PATH = BEST_FIT_FILEPATH
 SCALE = False 
@@ -30,7 +30,7 @@ def get_bounds():
     maxes = [-inf, -inf, -inf]
     best_fit_filepath = BEST_FIT_PATH
     best_fit_df = pd.read_csv(best_fit_filepath)
-    for phase in range(N_PHASES + 1):
+    for phase in range(N_VISIBLE_PHASES + 1):
         df = pd.read_csv(cluster_filepath(phase))
         xyz = [df[c] for c in ["x", "y", "z"]]
         for index, coord in enumerate(xyz):
@@ -55,7 +55,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
-    for phase in range(1, N_PHASES + 1):
+    for phase in range(1, N_VISIBLE_PHASES + 1):
         df = pd.read_csv(cluster_filepath(phase))
         xyz = [df[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
@@ -78,7 +78,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
-    for phase in range(1, N_PHASES + 1):
+    for phase in range(1, N_VISIBLE_PHASES + 1):
         slice = df[df["phase"] == phase]
         xyz = [slice[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
@@ -144,6 +144,7 @@ meshes = []
 file_resources = []
 animation_samplers = []
 channels = []
+animations = []
 materials = [
     # Cluster spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1])),
@@ -154,24 +155,40 @@ materials = [
 # Set up some stuff that we'll need for the animations
 # In particular, set up out timestamp buffer/view/accessor
 time_delta = 0.01
-timestamps = [time_delta * i for i in range(1, N_PHASES)]
-min_time = min(timestamps)
-max_time = max(timestamps)
+visible_timestamps = [time_delta * i for i in range(1, N_VISIBLE_PHASES)]
+invisible_timestamps = [time_delta * i for i in range(N_VISIBLE_PHASES, N_PHASES+1)]
+min_time = min(visible_timestamps)
+max_time = max(visible_timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 time_barr = bytearray()
-for time in timestamps:
+for time in visible_timestamps:
     time_barr.extend(struct.pack('f', time))
 time_bin = "time.bin"
 file_resources.append(FileResource(time_bin, data=time_barr))
 time_buffer = Buffer(byteLength=len(time_barr), uri=time_bin)
-time_buffer_view = BufferView(buffer=0, byteLength=len(time_barr))
-time_accessor = Accessor(bufferView=0, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
-                         type=AccessorType.SCALAR.value, min=[min_time], max=[max_time])
 buffers.append(time_buffer)
+time_buffer_view = BufferView(buffer=len(buffers)-1, byteLength=len(time_barr))
 buffer_views.append(time_buffer_view)
+time_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(visible_timestamps),
+                         type=AccessorType.SCALAR.value, min=[min_time], max=[max_time])
 accessors.append(time_accessor)
+time_accessor_index = len(accessors) - 1
+
+# "Animation" times and scales for the non-visible timestamps
+invisible_scales = [0 for _ in invisible_timestamps]
+invisible_barr = bytearray(invisible_scales)
+invisible_bin = "invisible.bin"
+invisible_buffer = Buffer(byteLength=len(invisible_barr))
+buffers.append(invisible_buffer)
+invisible_view = BufferView(buffer=len(buffers)-1, byteLength=len(invisible_barr))
+buffer_views.append(invisible_view)
+invisible_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(invisible_timestamps),
+                              type=AccessorType.SCALAR.value, min=[min(invisible_timestamps)], max=[max(invisible_timestamps)])
+accessors.append(invisible_accessor)
+invisible_time_accessor_index = len(accessors) - 1
+
 
 # Create a sphere for each point at phase=0
 for index, point in enumerate(positions):
@@ -223,14 +240,18 @@ for index, point in enumerate(positions):
     buffer_views.append(diff_buffer_view)
     diff_mins = [min([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
     diff_maxes = [max([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
-    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
+    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_VISIBLE_PHASES-1,
                              type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
     accessors.append(diff_accessor)
-    target = Target(node=index, path="translation")
-    sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
+    target = Target(node=len(nodes)-1, path="translation")
+    sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=len(accessors)-1)
     animation_samplers.append(sampler)
     channel = Channel(target=target, sampler=len(animation_samplers)-1)
     channels.append(channel)
+
+    # Make the "invisible" animation for each point
+    invisible_target = Target(node=len(nodes)-1, path="scale")
+    invisible_sampler = AnimationSampler(input=invisible_time_accessor_index, interpolation="LINEAR", output=invisible_scale_accessor_index)
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
@@ -284,15 +305,16 @@ for index, point in enumerate(bf_positions):
     buffer_views.append(diff_buffer_view)
     diff_mins = [min([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
     diff_maxes = [max([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
-    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1, type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
+    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_VISIBLE_PHASES-1, type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
     accessors.append(diff_accessor)
-    target = Target(node=index + N_POINTS, path="translation")
-    sampler = AnimationSampler(input=0, interpolation="LINEAR", output=len(accessors)-1)
+    target = Target(node=len(nodes)-1, path="translation")
+    sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=len(accessors)-1)
     animation_samplers.append(sampler)
     channel = Channel(target=target, sampler=len(animation_samplers)-1)
     channels.append(channel)
 
 animation = Animation(channels=channels, samplers=animation_samplers)
+animations.append(animation)
 
 # Finally, let's create the galaxy texture
 galaxy_square_side = 16_204
@@ -364,7 +386,7 @@ model = GLTFModel(
     bufferViews=buffer_views,
     accessors=accessors,
     materials=materials,
-    animations=[animation],
+    animations=animations,
     samplers=samplers,
     images=[galaxy_image],
     textures=[galaxy_texture]
