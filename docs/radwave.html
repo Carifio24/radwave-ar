@@ -2,6 +2,9 @@
       <body>
           <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
           <style>
+      html {
+        background-color: black;
+      }
       model-viewer {
         width: 100%;
         height: 100%;
@@ -89,6 +92,7 @@
       camera-orbit="0.9677rad 1.2427rad auto"
       shadow-intensity="1"
       autoplay
+      animation-name="Oscillating"
       ar
       ar-modes="webxr scene-viewer quick-look fallback"
       camera-controls
@@ -97,6 +101,27 @@
   >
       <button slot="ar-button" class="ar-button">View in your space</button>
       </model-viewer>
+      <script>
+        const mv = document.querySelector("model-viewer");
+        function onAnimationFrame(timestamp) {
+          if (mv) {
+            const time = mv.currentTime;
+            if (time >= 1) {
+              const material = mv.model.materials[0];
+              const pbr = material.pbrMetallicRoughness;
+              const color = [...pbr.baseColorFactor];
+              if (time <= 2.7) {
+                color[3] = 1 - ((time - 1) / 1.7); 
+              } else {
+                color[3] = 0;
+              }
+              pbr.setBaseColorFactor(color);
+            }
+          }
+          window.requestAnimationFrame(onAnimationFrame);
+        }
+      window.requestAnimationFrame(onAnimationFrame);
+      </script>
       </body>
   </html>
     

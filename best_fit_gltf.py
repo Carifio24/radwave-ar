@@ -78,8 +78,9 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
-    for phase in range(1, N_VISIBLE_PHASES + 1):
-        slice = df[df["phase"] == phase]
+    for phase in range(1, N_PHASES + 1):
+        bf_phase = phase % 360
+        slice = df[df["phase"] == bf_phase]
         xyz = [slice[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
@@ -143,7 +144,9 @@ nodes = []
 meshes = []
 file_resources = []
 animation_samplers = []
+invisible_animation_samplers = []
 channels = []
+invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
@@ -155,15 +158,20 @@ materials = [
 # Set up some stuff that we'll need for the animations
 # In particular, set up out timestamp buffer/view/accessor
 time_delta = 0.01
-visible_timestamps = [time_delta * i for i in range(1, N_VISIBLE_PHASES)]
-invisible_timestamps = [time_delta * i for i in range(N_VISIBLE_PHASES, N_PHASES+1)]
-min_time = min(visible_timestamps)
-max_time = max(visible_timestamps)
+timestamps = [time_delta * i for i in range(1, N_PHASES)]
+min_time = min(timestamps)
+max_time = max(timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
+
+# Zero-pad translations to account for "invisible" portion
+for pt in translations:
+    count = len(translations[pt])
+    translations[pt].extend([(0.0, 0.0, 0.0) for _ in range(N_PHASES-1-count)])
+
 time_barr = bytearray()
-for time in visible_timestamps:
+for time in timestamps:
     time_barr.extend(struct.pack('f', time))
 time_bin = "time.bin"
 file_resources.append(FileResource(time_bin, data=time_barr))
@@ -171,23 +179,29 @@ time_buffer = Buffer(byteLength=len(time_barr), uri=time_bin)
 buffers.append(time_buffer)
 time_buffer_view = BufferView(buffer=len(buffers)-1, byteLength=len(time_barr))
 buffer_views.append(time_buffer_view)
-time_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(visible_timestamps),
+time_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(timestamps),
                          type=AccessorType.SCALAR.value, min=[min_time], max=[max_time])
 accessors.append(time_accessor)
 time_accessor_index = len(accessors) - 1
 
 # "Animation" times and scales for the non-visible timestamps
-invisible_scales = [0 for _ in invisible_timestamps]
-invisible_barr = bytearray(invisible_scales)
+zero_scale = [0.0, 0.0, 0.0]
+one_scale = [1.0, 1.0, 1.0]
+invisible_scales = [one_scale for _ in range(1, N_VISIBLE_PHASES + 1)] + [zero_scale for _ in range(N_PHASES-N_VISIBLE_PHASES-1)]
+invisible_barr = bytearray()
+for scale in invisible_scales:
+    for coord in scale:
+        invisible_barr.extend(struct.pack('f', coord))
 invisible_bin = "invisible.bin"
-invisible_buffer = Buffer(byteLength=len(invisible_barr))
+invisible_buffer = Buffer(byteLength=len(invisible_barr), uri=invisible_bin)
 buffers.append(invisible_buffer)
 invisible_view = BufferView(buffer=len(buffers)-1, byteLength=len(invisible_barr))
 buffer_views.append(invisible_view)
-invisible_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(invisible_timestamps),
-                              type=AccessorType.SCALAR.value, min=[min(invisible_timestamps)], max=[max(invisible_timestamps)])
+invisible_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(invisible_scales),
+                              type=AccessorType.VEC3.value, min=zero_scale, max=one_scale)
 accessors.append(invisible_accessor)
-invisible_time_accessor_index = len(accessors) - 1
+invisible_scale_accessor_index = len(accessors) - 1
+file_resources.append(FileResource(invisible_bin, data=invisible_barr))
 
 
 # Create a sphere for each point at phase=0
@@ -240,7 +254,7 @@ for index, point in enumerate(positions):
     buffer_views.append(diff_buffer_view)
     diff_mins = [min([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
     diff_maxes = [max([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
-    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_VISIBLE_PHASES-1,
+    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
                              type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
     accessors.append(diff_accessor)
     target = Target(node=len(nodes)-1, path="translation")
@@ -251,12 +265,16 @@ for index, point in enumerate(positions):
 
     # Make the "invisible" animation for each point
     invisible_target = Target(node=len(nodes)-1, path="scale")
-    invisible_sampler = AnimationSampler(input=invisible_time_accessor_index, interpolation="LINEAR", output=invisible_scale_accessor_index)
+    invisible_sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=invisible_scale_accessor_index)
+    invisible_animation_samplers.append(invisible_sampler)
+    channel = Channel(target=invisible_target, sampler=len(invisible_animation_samplers)-1)
+    invisible_channels.append(channel)
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
 best_fit_radius = 1.25 * (0.001 if SCALE else 10)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
+
 for index, point in enumerate(bf_positions):
     points, triangles = sphere_mesh(point, best_fit_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
@@ -305,7 +323,7 @@ for index, point in enumerate(bf_positions):
     buffer_views.append(diff_buffer_view)
     diff_mins = [min([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
     diff_maxes = [max([operator.itemgetter(i)(diff) for diff in diffs]) for i in range(3)]
-    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_VISIBLE_PHASES-1, type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
+    diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1, type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
     accessors.append(diff_accessor)
     target = Target(node=len(nodes)-1, path="translation")
     sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=len(accessors)-1)
@@ -313,13 +331,14 @@ for index, point in enumerate(bf_positions):
     channel = Channel(target=target, sampler=len(animation_samplers)-1)
     channels.append(channel)
 
-animation = Animation(channels=channels, samplers=animation_samplers)
+animation = Animation(name="Oscillating", channels=channels, samplers=animation_samplers)
 animations.append(animation)
+invisible_animation = Animation(name="Hiding", channels=invisible_channels, samplers=invisible_animation_samplers)
+animations.append(invisible_animation)
 
 # Finally, let's create the galaxy texture
 galaxy_square_side = 16_204
 sun_to_center_dist = 8122  # in pc
-sun_to_center_shift  = sun_to_center_dist / math.sqrt(2)
 galaxy_points = [
     [galaxy_square_side, 0, galaxy_square_side],
     [galaxy_square_side, 0, -galaxy_square_side],
