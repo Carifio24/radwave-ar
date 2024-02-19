@@ -132,7 +132,7 @@ initial_filepath = cluster_filepath(0)
 initial_df = pd.read_csv(initial_filepath)
 
 # Let's set up our arrays and any constant values
-radius = 0.005 if SCALE else 5
+radius = 2.5 * (0.005 if SCALE else 5)
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -234,7 +234,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.001 if SCALE else 10
+best_fit_radius = 1.25 * (0.001 if SCALE else 10)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 for index, point in enumerate(bf_positions):
     points, triangles = sphere_mesh(point, best_fit_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
@@ -319,7 +319,7 @@ galaxy_sampler = Sampler()
 samplers = [galaxy_sampler]
 galaxy_texture = Texture(source=0, sampler=len(samplers)-1)
 galaxy_texture_info = TextureInfo(index=0)
-materials.append(Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.2], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
+materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.5], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
 
 galaxy_barr = bytearray()
 for point in galaxy_points:
