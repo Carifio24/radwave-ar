@@ -37,9 +37,9 @@ def convert_coordinates_galactic(df):
     out = pd.DataFrame()
     out["phase"] = df["phase"]
     out["d"] = df["d"]
-    ra_dec = zip(df["ra"], df["dec"])
+    ra_dec_d = zip(df["ra"], df["dec"], df["d"])
     print("About to convert")
-    coords = [SkyCoord(ra=ra * u.deg, dec=dec * u.deg).transform_to(Galactic) for ra, dec in ra_dec]
+    coords = [SkyCoord(ra=ra * u.deg, dec=dec * u.deg, distance=d * u.pc).transform_to(Galactic) for ra, dec, d in ra_dec_d]
     ls = []
     bs = []
     xs = []
@@ -73,16 +73,16 @@ def convert(filepath):
     print("Read CSV")
     new_df = convert_coordinates_galactic(df)
     base, ext = splitext(filepath)
-    base = base.replace("_radec", "")
+    base = base.replace("_radec", "_galactic")
     path = base + ext
     new_df.to_csv(path, index=False)
 
 
 if __name__ == "__main__":
-    # for phase in range(271):
-    #     print(f"Phase: {phase}")
-    #     fpath = join("data", f"RW_cluster_oscillation_{phase}_updated_radec.csv")
-    #     convert(fpath)
+    for phase in range(271):
+        print(f"Phase: {phase}")
+        fpath = join("data", f"RW_cluster_oscillation_{phase}_updated_radec.csv")
+        convert(fpath)
 
     print("Downsampled")
     convert(join("data", "RW_best_fit_oscillation_phase_radec_downsampled.csv"))

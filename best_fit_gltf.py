@@ -295,13 +295,16 @@ for index, point in enumerate(bf_positions):
 animation = Animation(channels=channels, samplers=animation_samplers)
 
 # Finally, let's create the galaxy texture
-galaxy_square_side = 30_000 * math.sqrt(2)
+galaxy_square_side = 16_204
+sun_to_center_dist = 8122  # in pc
+sun_to_center_shift  = sun_to_center_dist / math.sqrt(2)
 galaxy_points = [
     [galaxy_square_side, 0, galaxy_square_side],
     [galaxy_square_side, 0, -galaxy_square_side],
     [-galaxy_square_side, 0, -galaxy_square_side],
     [-galaxy_square_side, 0, galaxy_square_side]
 ]
+galaxy_points = [[p[0], p[1], p[2] - sun_to_center_dist] for p in galaxy_points]
 galaxy_triangles= [[0, 1, 2], [2, 3, 0]]
 galaxy_texcoords = [
     [1.0, 1.0],
@@ -316,7 +319,7 @@ galaxy_sampler = Sampler()
 samplers = [galaxy_sampler]
 galaxy_texture = Texture(source=0, sampler=len(samplers)-1)
 galaxy_texture_info = TextureInfo(index=0)
-materials.append(Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
+materials.append(Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.2], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
 
 galaxy_barr = bytearray()
 for point in galaxy_points:

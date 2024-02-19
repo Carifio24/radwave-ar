@@ -11,12 +11,13 @@ N_PHASES = 270
 output_directory = "out"
 
 
+COORDINATES = "galactic"
 def cluster_filepath(phase):
-    return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
+    return join("data", f"RW_cluster_oscillation_{phase}_updated_{COORDINATES}.csv")
 
 
-BEST_FIT_FILEPATH = join("data", "RW_best_fit_oscillation_phase.csv")
-BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", "RW_best_fit_oscillation_phase_downsampled.csv")
+BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}.csv")
+BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")
 
 
 initial_filepath = cluster_filepath(0)
