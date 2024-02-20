@@ -55,8 +55,8 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
-    for phase in range(1, N_VISIBLE_PHASES + 1):
-        df = pd.read_csv(cluster_filepath(phase))
+    for phase in range(1, N_PHASES + 1):
+        df = pd.read_csv(cluster_filepath(phase % 360))
         xyz = [df[c].to_numpy() for c in ["x", "y", "z"]]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
@@ -150,7 +150,7 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1])),
+    Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1])),
     # Best-fit spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[195 / 255, 236 / 255, 255 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
@@ -164,11 +164,6 @@ max_time = max(timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
-
-# Zero-pad translations to account for "invisible" portion
-for pt in translations:
-    count = len(translations[pt])
-    translations[pt].extend([(0.0, 0.0, 0.0) for _ in range(N_PHASES-1-count)])
 
 time_barr = bytearray()
 for time in timestamps:

@@ -79,12 +79,12 @@ def convert(filepath):
 
 
 if __name__ == "__main__":
-    for phase in range(271):
+    for phase in range(271, 361):
         print(f"Phase: {phase}")
         fpath = join("data", f"RW_cluster_oscillation_{phase}_updated_radec.csv")
         convert(fpath)
 
-    print("Downsampled")
-    convert(join("data", "RW_best_fit_oscillation_phase_radec_downsampled.csv"))
-    print("Regular")
-    convert(join("data", "RW_best_fit_oscillation_phase_radec.csv"))
+    # print("Downsampled")
+    # convert(join("data", "RW_best_fit_oscillation_phase_radec_downsampled.csv"))
+    # print("Regular")
+    # convert(join("data", "RW_best_fit_oscillation_phase_radec.csv"))

@@ -103,18 +103,20 @@
       </model-viewer>
       <script>
         const mv = document.querySelector("model-viewer");
+        const slope = - 1 / 1.7;
+        const intercept = 1 - slope;
         function onAnimationFrame(timestamp) {
-          if (mv) {
-            const time = mv.currentTime;
-            if (time >= 1) {
-              const material = mv.model.materials[0];
-              const pbr = material.pbrMetallicRoughness;
-              const color = [...pbr.baseColorFactor];
-              if (time <= 2.7) {
-                color[3] = 1 - ((time - 1) / 1.7); 
-              } else {
-                color[3] = 0;
-              }
+          const time = mv.currentTime;
+          if (mv.model) {
+            const material = mv.model.materials[0];
+            const pbr = material.pbrMetallicRoughness;
+            const color = [...pbr.baseColorFactor];
+            const adjustedTime = Math.abs(Math.abs(time - 3.6) - 3.6);
+            const opacity = slope * adjustedTime + intercept;
+            const clampedOpacity = Math.max(Math.min(opacity, 1), 0);
+            console.log(time, adjustedTime, clampedOpacity);
+            if (color[3] !== clampedOpacity) {
+              color[3] = clampedOpacity;
               pbr.setBaseColorFactor(color);
             }
           }
