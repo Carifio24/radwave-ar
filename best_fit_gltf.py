@@ -334,19 +334,26 @@ animations.append(invisible_animation)
 # Finally, let's create the galaxy texture
 galaxy_square_side = 16_204
 sun_to_center_dist = 8122  # in pc
+galaxy_fraction = 0.2
+shift_fraction = sun_to_center_dist / galaxy_square_side
+galaxy_image_side = galaxy_square_side * galaxy_fraction
 galaxy_points = [
-    [galaxy_square_side, 0, galaxy_square_side],
-    [galaxy_square_side, 0, -galaxy_square_side],
-    [-galaxy_square_side, 0, -galaxy_square_side],
-    [-galaxy_square_side, 0, galaxy_square_side]
+    [galaxy_image_side, 0, galaxy_image_side],
+    [galaxy_image_side, 0, -galaxy_image_side],
+    [-galaxy_image_side, 0, -galaxy_image_side],
+    [-galaxy_image_side, 0, galaxy_image_side]
 ]
-galaxy_points = [[p[0], p[1], p[2] - sun_to_center_dist] for p in galaxy_points]
+galaxy_points = [[p[0], p[1], p[2] - sun_to_center_dist * galaxy_fraction / 2] for p in galaxy_points]
 galaxy_triangles= [[0, 1, 2], [2, 3, 0]]
+below_half_x = 0.5 - galaxy_fraction / 2
+below_half_z = below_half_x - shift_fraction / 2
+above_half_x = 0.5 + galaxy_fraction / 2
+above_half_z = above_half_x - shift_fraction / 2
 galaxy_texcoords = [
-    [1.0, 1.0],
-    [1.0, 0.0],
-    [0.0, 0.0],
-    [0.0, 1.0]
+    [above_half_x, above_half_z],
+    [above_half_x, below_half_z],
+    [below_half_x, below_half_z],
+    [below_half_x, above_half_z]
 ]
 galaxy_image_path = join("images", "milkywaybar.jpg")
 galaxy_image = Image(uri=galaxy_image_path)
