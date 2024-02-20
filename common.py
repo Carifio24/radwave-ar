@@ -13,17 +13,13 @@ output_directory = "out"
 
 
 COORDINATES = "galactic"
-def cluster_filepath(phase):
-    return join("data", f"RW_cluster_oscillation_{phase}_updated_{COORDINATES}.csv")
+CLUSTER_FILEPATH = join("data", "RW_cluster_oscillation_phase_updated_galactocentric.csv")
 
 
-BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}.csv")
+BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_galactocentric.csv")
 BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")
 
-
-initial_filepath = cluster_filepath(0)
-initial_df = pd.read_csv(initial_filepath)
-N_POINTS = initial_df.shape[0]
+N_POINTS = 89
 
 
 def scale(value, lower, upper):

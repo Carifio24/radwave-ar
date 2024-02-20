@@ -11,10 +11,16 @@ from numpy import inf
 import operator
 import struct
 
-from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, cluster_filepath, clip_linear_transformations 
+from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
 
 BEST_FIT_PATH = BEST_FIT_FILEPATH
 SCALE = False 
+
+
+# Note that there are occasionally some funky coordinate things throughout
+# glTF is a right-handed +y coordinate system
+# which should be equivalent to (x, -z, y)
+
 
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     if row == 0:
@@ -28,17 +34,20 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
 def get_bounds():
     mins = [inf, inf, inf]
     maxes = [-inf, -inf, -inf]
+    cluster_df = pd.read_csv(CLUSTER_FILEPATH)
     best_fit_filepath = BEST_FIT_PATH
     best_fit_df = pd.read_csv(best_fit_filepath)
     for phase in range(N_VISIBLE_PHASES + 1):
-        df = pd.read_csv(cluster_filepath(phase))
-        xyz = [df[c] for c in ["x", "y", "z"]]
+        slice = cluster_df[cluster_df["phase"] == phase]
+        xyz = [slice[c] for c in ["xc", "zc", "yc"]]
+        xyz[0] = -xyz[0]
         for index, coord in enumerate(xyz):
             mins[index] = min(mins[index], min(coord))
             maxes[index] = max(maxes[index], max(coord))
     
         best_fit_phase = best_fit_df[best_fit_df["phase"] == phase]
-        best_fit_xyz = [best_fit_phase[c] for c in ["x", "y", "z"]]
+        best_fit_xyz = [best_fit_phase[c] for c in ["xc", "zc", "yc"]]
+        best_fit_xyz[0] = -best_fit_xyz[0]
         for index, coord in enumerate(best_fit_xyz):
             mins[index] = min(mins[index], min(coord))
             maxes[index] = max(maxes[index], max(coord))
@@ -49,19 +58,21 @@ def get_bounds():
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
 def get_positions_and_translations(scale=True, clip_transforms=None):
-    initial_df = pd.read_csv(cluster_filepath(0))
-    initial_xyz = [initial_df["x"], initial_df["y"], initial_df["z"]]
+    df = pd.read_csv(CLUSTER_FILEPATH)
+    initial_phase = df[df["phase"] == 0]
+    initial_xyz = [-initial_phase["xc"], initial_phase["zc"], initial_phase["yc"]]
     translations = { pt: [] for pt in range(N_POINTS) }
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for phase in range(1, N_PHASES + 1):
-        df = pd.read_csv(cluster_filepath(phase % 360))
-        xyz = [df[c].to_numpy() for c in ["x", "y", "z"]]
+        slice = df[df["phase"] == phase % 360]
+        xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
+        xyz[0] = -xyz[0]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
-        for pt in range(df.shape[0]):
+        for pt in range(initial_phase.shape[0]):
             translations[pt].append(tuple(x[pt] for x in diffs))
     
     positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
@@ -73,7 +84,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
 def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(BEST_FIT_PATH)
     initial_phase = df[df["phase"] == 0]
-    initial_xyz = [initial_phase["x"], initial_phase["y"], initial_phase["z"]]
+    initial_xyz = [-initial_phase["xc"], initial_phase["zc"], initial_phase["yc"]]
     translations = { pt: [] for pt in range(initial_phase.shape[0]) }
 
     if scale:
@@ -81,7 +92,8 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     for phase in range(1, N_PHASES + 1):
         bf_phase = phase % 360
         slice = df[df["phase"] == bf_phase]
-        xyz = [slice[c].to_numpy() for c in ["x", "y", "z"]]
+        xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
+        xyz[0] = -xyz[0]
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -129,11 +141,9 @@ def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
 
 output_directory = "out"
 
-initial_filepath = cluster_filepath(0)
-initial_df = pd.read_csv(initial_filepath)
 
 # Let's set up our arrays and any constant values
-radius = 2.5 * (0.005 if SCALE else 5)
+radius = 5 * (0.005 if SCALE else 5)
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -150,9 +160,9 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 60 / 255, 241 / 255, 1])),
+    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
     # Best-fit spheres
-    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[195 / 255, 236 / 255, 255 / 255, 1], metallicFactor=0, roughnessFactor=0)),
+    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[132 / 255, 215 / 255, 245 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
 
 # Set up some stuff that we'll need for the animations
@@ -267,7 +277,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 1.25 * (0.001 if SCALE else 10)
+best_fit_radius = 0.5 * (0.001 if SCALE else 10)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
@@ -328,25 +338,27 @@ for index, point in enumerate(bf_positions):
 
 animation = Animation(name="Oscillating", channels=channels, samplers=animation_samplers)
 animations.append(animation)
-invisible_animation = Animation(name="Hiding", channels=invisible_channels, samplers=invisible_animation_samplers)
-animations.append(invisible_animation)
+# animationinvisible_animation = Animation(name="Hiding", channels=invisible_channels, samplers=invisible_animation_samplers)
+# animations.append(invisible_animation)
 
 # Finally, let's create the galaxy texture
-galaxy_square_side = 16_204
-sun_to_center_dist = 8122  # in pc
+
+# The "radius" of the galaxy image in parsecs
+# We had to figure this out by trial-and-error
+galaxy_square_side = 18_500
 galaxy_points = [
     [galaxy_square_side, 0, galaxy_square_side],
     [galaxy_square_side, 0, -galaxy_square_side],
     [-galaxy_square_side, 0, -galaxy_square_side],
     [-galaxy_square_side, 0, galaxy_square_side]
 ]
-galaxy_points = [[p[0], p[1], p[2] - sun_to_center_dist] for p in galaxy_points]
-galaxy_triangles= [[0, 1, 2], [2, 3, 0]]
+galaxy_points = [[p[0], p[1], p[2]] for p in galaxy_points]
+galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 galaxy_texcoords = [
+    [0.0, 1.0],
     [1.0, 1.0],
     [1.0, 0.0],
-    [0.0, 0.0],
-    [0.0, 1.0]
+    [0.0, 0.0]
 ]
 galaxy_image_path = join("images", "milkywaybar.jpg")
 galaxy_image = Image(uri=galaxy_image_path)
@@ -355,7 +367,7 @@ galaxy_sampler = Sampler()
 samplers = [galaxy_sampler]
 galaxy_texture = Texture(source=0, sampler=len(samplers)-1)
 galaxy_texture_info = TextureInfo(index=0)
-materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.5], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
+materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.75], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
 
 galaxy_barr = bytearray()
 for point in galaxy_points:
