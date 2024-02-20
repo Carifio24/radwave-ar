@@ -114,7 +114,6 @@
             const adjustedTime = Math.abs(Math.abs(time - 3.6) - 3.6);
             const opacity = slope * adjustedTime + intercept;
             const clampedOpacity = Math.max(Math.min(opacity, 1), 0);
-            console.log(time, adjustedTime, clampedOpacity);
             if (color[3] !== clampedOpacity) {
               color[3] = clampedOpacity;
               pbr.setBaseColorFactor(color);
