@@ -4,15 +4,21 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
-    "N_PHASES", "cluster_filepath", "scale"
+    "N_VISIBLE_PHASES", "N_PHASES", "clip_linear_transformations", "cluster_filepath", "scale"
 ]
 
-N_PHASES = 270
+N_VISIBLE_PHASES = 270
+N_PHASES = 720
 output_directory = "out"
 
 
+COORDINATES = "galactic"
 def cluster_filepath(phase):
-    return join("data", f"RW_cluster_oscillation_{phase}_updated.csv")
+    return join("data", f"RW_cluster_oscillation_{phase}_updated_{COORDINATES}.csv")
+
+
+BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}.csv")
+BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")
 
 
 initial_filepath = cluster_filepath(0)
