@@ -20,6 +20,26 @@ BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_galactocentric.
 BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")
 
 N_POINTS = 89
+N_BEST_FIT_POINTS = 1500
+
+
+def get_bounds():
+    mins = [np.inf, np.inf, np.inf]
+    maxes = [-np.inf, -np.inf, -np.inf]
+    cluster_df = pd.read_csv(CLUSTER_FILEPATH)
+    best_fit_filepath = BEST_FIT_FILEPATH
+    best_fit_df = pd.read_csv(best_fit_filepath)
+    for phase in range(N_VISIBLE_PHASES + 1):
+        for df in (cluster_df, best_fit_df):
+            slice = df[df["phase"] == phase]
+            xyz = [slice[c] for c in ["xc", "zc", "yc"]]
+            xyz[0] *= -1
+            xyz[1] -= 20.8
+            for index, coord in enumerate(xyz):
+                mins[index] = min(mins[index], min(coord))
+                maxes[index] = max(maxes[index], max(coord))
+    
+    return mins, maxes
 
 
 def scale(value, lower, upper):

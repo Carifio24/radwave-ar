@@ -7,11 +7,11 @@ from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Image, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Sampler, Scene, Attributes, Mesh, Buffer, \
     Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo, interpolation 
-from numpy import inf, diag, array
+from numpy import diag, array
 import operator
 import struct
 
-from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
+from common import get_bounds, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
 
 
 # Overall configuration settings
@@ -44,30 +44,6 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
         return phi_resolution * (row - 1) + column + 1
 
 
-def get_bounds():
-    mins = [inf, inf, inf]
-    maxes = [-inf, -inf, -inf]
-    cluster_df = pd.read_csv(CLUSTER_FILEPATH)
-    best_fit_filepath = BEST_FIT_FILEPATH
-    best_fit_df = pd.read_csv(best_fit_filepath)
-    for phase in range(N_VISIBLE_PHASES + 1):
-        slice = cluster_df[cluster_df["phase"] == phase]
-        xyz = [slice[c] for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
-        for index, coord in enumerate(xyz):
-            mins[index] = min(mins[index], min(coord))
-            maxes[index] = max(maxes[index], max(coord))
-    
-        best_fit_phase = best_fit_df[best_fit_df["phase"] == phase]
-        best_fit_xyz = [best_fit_phase[c] for c in ["xc", "zc", "yc"]]
-        best_fit_xyz[0] = -best_fit_xyz[0]
-        for index, coord in enumerate(best_fit_xyz):
-            mins[index] = min(mins[index], min(coord))
-            maxes[index] = max(maxes[index], max(coord))
-
-    return mins, maxes
-
-
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
 def get_positions_and_translations(scale=True, clip_transforms=None):
@@ -81,7 +57,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
     for phase in range(1, N_PHASES + 1):
         slice = df[df["phase"] == phase % 360]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
+        xyz[0] *= -1
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
@@ -111,7 +87,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         bf_phase = phase % 360
         slice = df[df["phase"] == bf_phase]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
+        xyz[0] *= -1
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
