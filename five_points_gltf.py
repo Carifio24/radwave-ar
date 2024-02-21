@@ -16,7 +16,7 @@ from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST
 BEST_FIT_PATH = BEST_FIT_FILEPATH
 SCALE = False 
 
-TRIM_GALAXY = False 
+TRIM_GALAXY = True 
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -261,7 +261,7 @@ nodes.append(Node(mesh=len(meshes)-1))
 
 
 # Create a sphere for each point at phase=0
-for index, point in enumerate(positions):
+for index, point in enumerate(positions[:5]):
 
     points, triangles = sphere_mesh(point, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
@@ -331,7 +331,7 @@ for index, point in enumerate(positions):
 best_fit_radius = 0.5 * (0.001 if SCALE else 10)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
-for index, point in enumerate(bf_positions):
+for index, point in enumerate(bf_positions[:5]):
     points, triangles = sphere_mesh(point, best_fit_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
     point_maxes = [max([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
