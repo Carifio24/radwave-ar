@@ -11,7 +11,7 @@ from numpy import inf, diag, array
 import operator
 import struct
 
-from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
+from common import N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
 
 
 # Overall configuration settings
@@ -50,7 +50,7 @@ def get_bounds():
     cluster_df = pd.read_csv(CLUSTER_FILEPATH)
     best_fit_filepath = BEST_FIT_FILEPATH
     best_fit_df = pd.read_csv(best_fit_filepath)
-    for phase in range(N_VISIBLE_PHASES + 1):
+    for phase in range(N_PHASES + 1):
         slice = cluster_df[cluster_df["phase"] == phase]
         xyz = [slice[c] for c in ["xc", "zc", "yc"]]
         xyz[0] = -xyz[0]
@@ -470,9 +470,11 @@ galaxy_texcoords_view = BufferView(buffer=len(buffers)-1, byteLength=len(galaxy_
 buffer_views.append(galaxy_positions_view)
 buffer_views.append(galaxy_indices_view)
 buffer_views.append(galaxy_texcoords_view)
+galaxy_point_mins = [min([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
+galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
 galaxy_texcoord_mins = [min([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
 galaxy_texcoord_maxes = [max([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
-galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
+galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_point_mins, max=galaxy_point_maxes)
 galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
 galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=galaxy_texcoord_mins, max=galaxy_texcoord_maxes)
 accessors.append(galaxy_positions_accessor)

@@ -8,7 +8,7 @@ __all__ = [
 ]
 
 N_VISIBLE_PHASES = 270
-N_PHASES = 720
+N_PHASES = 360
 output_directory = "out"
 
 
