@@ -14,17 +14,19 @@ import struct
 from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
 
 BEST_FIT_PATH = BEST_FIT_FILEPATH
-SCALE = False 
-
+SCALE = True 
 TRIM_GALAXY = False 
 
 
 # Note that there are occasionally some funky coordinate things throughout
-# glTF is a right-handed +y coordinate system
-# which should be equivalent to (x, -z, y)
+# glTF is a right-handed +y coordinate system (so we want the galaxy in the x-z plane)
+# but galactocentric coordinates have the galaxy in the x-y plane
+# so we just need to account for that
 
 from numpy.random import multivariate_normal
 sigma_val = 15 / math.sqrt(3)
+if SCALE:
+    sigma_val /= 1000
 sigma = array([sigma_val] * 3)
 cov = diag(sigma**2)
 GAUSSIAN_POINTS = 10
@@ -206,28 +208,32 @@ accessors.append(time_accessor)
 time_accessor_index = len(accessors) - 1
 
 # "Animation" times and scales for the non-visible timestamps
-zero_scale = [0.0, 0.0, 0.0]
-one_scale = [1.0, 1.0, 1.0]
-invisible_scales = [one_scale for _ in range(1, N_VISIBLE_PHASES + 1)] + [zero_scale for _ in range(N_PHASES-N_VISIBLE_PHASES-1)]
-invisible_barr = bytearray()
-for scale in invisible_scales:
-    for coord in scale:
-        invisible_barr.extend(struct.pack('f', coord))
-invisible_bin = "invisible.bin"
-invisible_buffer = Buffer(byteLength=len(invisible_barr), uri=invisible_bin)
-buffers.append(invisible_buffer)
-invisible_view = BufferView(buffer=len(buffers)-1, byteLength=len(invisible_barr))
-buffer_views.append(invisible_view)
-invisible_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(invisible_scales),
-                              type=AccessorType.VEC3.value, min=zero_scale, max=one_scale)
-accessors.append(invisible_accessor)
-invisible_scale_accessor_index = len(accessors) - 1
-file_resources.append(FileResource(invisible_bin, data=invisible_barr))
+# zero_scale = [0.0, 0.0, 0.0]
+# one_scale = [1.0, 1.0, 1.0]
+# invisible_scales = [one_scale for _ in range(1, N_VISIBLE_PHASES + 1)] + [zero_scale for _ in range(N_PHASES-N_VISIBLE_PHASES-1)]
+# invisible_barr = bytearray()
+# for scale in invisible_scales:
+#     for coord in scale:
+#         invisible_barr.extend(struct.pack('f', coord))
+# invisible_bin = "invisible.bin"
+# invisible_buffer = Buffer(byteLength=len(invisible_barr), uri=invisible_bin)
+# buffers.append(invisible_buffer)
+# invisible_view = BufferView(buffer=len(buffers)-1, byteLength=len(invisible_barr))
+# buffer_views.append(invisible_view)
+# invisible_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(invisible_scales),
+#                               type=AccessorType.VEC3.value, min=zero_scale, max=one_scale)
+# accessors.append(invisible_accessor)
+# invisible_scale_accessor_index = len(accessors) - 1
+# file_resources.append(FileResource(invisible_bin, data=invisible_barr))
 
 
 # Add in the Sun
 sun_position = [8121.97336612, 0., 0.]
-sun_radius = 10
+if SCALE:
+    sun_position_columns = [[c] for c in sun_position]
+    sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
+    sun_position = [c[0] for c in sun_position_clip]
+sun_radius = 0.01 if SCALE else 10
 sun_points, sun_triangles = sphere_mesh(sun_position, sun_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
 sun_point_mins = [min([operator.itemgetter(i)(pt) for pt in sun_points]) for i in range(3)]
 sun_point_maxes = [max([operator.itemgetter(i)(pt) for pt in sun_points]) for i in range(3)]
@@ -320,11 +326,11 @@ for index, point in enumerate(positions):
     channels.append(channel)
 
     # Make the "invisible" animation for each point
-    invisible_target = Target(node=len(nodes)-1, path="scale")
-    invisible_sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=invisible_scale_accessor_index)
-    invisible_animation_samplers.append(invisible_sampler)
-    channel = Channel(target=invisible_target, sampler=len(invisible_animation_samplers)-1)
-    invisible_channels.append(channel)
+    # invisible_target = Target(node=len(nodes)-1, path="scale")
+    # invisible_sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=invisible_scale_accessor_index)
+    # invisible_animation_samplers.append(invisible_sampler)
+    # channel = Channel(target=invisible_target, sampler=len(invisible_animation_samplers)-1)
+    # invisible_channels.append(channel)
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
@@ -411,20 +417,26 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+if TRIM_GALAXY:
+    galaxy_points = [[p[0] + shift, p[1], p[2]] for p in galaxy_points]
+
+# This is the transformation from world space -> galaxy texture space
+# We determined that the galaxy image needs a 90 degree rotation
+# and so this affine transformation accounts for that.
+# It's easier if we do this before we scale
+slope = 0.5 / galaxy_square_edge
+intercept = slope * galaxy_square_edge
+texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
+galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+
+if SCALE:
+    galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
+    galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
+    galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-# This is the transformation from world space -> galaxy texture space
-# We determined that the galaxy image needs a 90 degree rotation
-# and so this affine transformation accounts for that
-slope = 0.5 / galaxy_square_edge
-intercept = slope * galaxy_square_edge
-texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
-
-if TRIM_GALAXY:
-    galaxy_points = [[p[0] + shift, p[1], p[2]] for p in galaxy_points]
-galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 galaxy_image_path = join("images", "milkywaybar.jpg")
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
@@ -456,9 +468,11 @@ galaxy_texcoords_view = BufferView(buffer=len(buffers)-1, byteLength=len(galaxy_
 buffer_views.append(galaxy_positions_view)
 buffer_views.append(galaxy_indices_view)
 buffer_views.append(galaxy_texcoords_view)
+galaxy_texcoord_mins = [min([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
+galaxy_texcoord_maxes = [max([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
 galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
 galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
-galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=[0,0], max=[1,1])
+galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=galaxy_texcoord_mins, max=galaxy_texcoord_maxes)
 accessors.append(galaxy_positions_accessor)
 accessors.append(galaxy_indices_accessor)
 accessors.append(galaxy_texcoords_accessor)
