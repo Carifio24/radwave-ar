@@ -11,11 +11,13 @@ from numpy import inf, diag, array
 import operator
 import struct
 
-from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST_FIT_DOWNSAMPLED_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
+from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
 
-BEST_FIT_PATH = BEST_FIT_FILEPATH
+
+# Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
+GAUSSIAN_POINTS = 6
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -29,7 +31,6 @@ if SCALE:
     sigma_val /= 1000
 sigma = array([sigma_val] * 3)
 cov = diag(sigma**2)
-GAUSSIAN_POINTS = 10
 def sample_around(point, n=GAUSSIAN_POINTS):
     return multivariate_normal(mean=point, cov=cov, size=n)
 
@@ -47,7 +48,7 @@ def get_bounds():
     mins = [inf, inf, inf]
     maxes = [-inf, -inf, -inf]
     cluster_df = pd.read_csv(CLUSTER_FILEPATH)
-    best_fit_filepath = BEST_FIT_PATH
+    best_fit_filepath = BEST_FIT_FILEPATH
     best_fit_df = pd.read_csv(best_fit_filepath)
     for phase in range(N_VISIBLE_PHASES + 1):
         slice = cluster_df[cluster_df["phase"] == phase]
@@ -99,7 +100,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
 # Note that these need to be overall translations (i.e. x(t) - x(0))
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
 def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
-    df = pd.read_csv(BEST_FIT_PATH)
+    df = pd.read_csv(BEST_FIT_FILEPATH)
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
     translations = { pt: [] for pt in range(initial_phase.shape[0]) }
