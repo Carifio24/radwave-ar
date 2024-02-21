@@ -15,7 +15,7 @@ from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, BEST
 
 BEST_FIT_PATH = BEST_FIT_FILEPATH
 SCALE = True 
-TRIM_GALAXY = False 
+TRIM_GALAXY = True 
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -229,6 +229,7 @@ time_accessor_index = len(accessors) - 1
 
 # Add in the Sun
 sun_position = [8121.97336612, 0., 0.]
+sun_world_position = sun_position
 if SCALE:
     sun_position_columns = [[c] for c in sun_position]
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
@@ -403,7 +404,7 @@ animations.append(animation)
 # The "radius" of the galaxy image in parsecs
 # We had to figure this out by trial-and-error
 galaxy_square_edge = 18_500
-shift = sun_position[0]
+shift = sun_world_position[0]
 shift_fraction = 0.5 * shift / galaxy_square_edge
 if TRIM_GALAXY:
     galaxy_fraction = 0.2
