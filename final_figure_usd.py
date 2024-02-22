@@ -191,12 +191,41 @@ if SCALE:
 galaxy_prim_key = "/world/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
 galaxy_mesh_key = f"{galaxy_prim_key}/mesh"
-mesh = UsdGeom.Mesh.Define(stage, galaxy_mesh_key)
-mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
-mesh.CreatePointsAttr(galaxy_points)
-mesh.CreateExtentAttr(UsdGeom.PointBased(mesh).ComputeExtent(mesh.GetPointsAttr().Get()))
-mesh.CreateFaceVertexCountsAttr([4])
-mesh.CreateFaceVertexIndicesAttr([0,1,2,3])
+galaxy_mesh = UsdGeom.Mesh.Define(stage, galaxy_mesh_key)
+galaxy_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
+galaxy_mesh.CreatePointsAttr(galaxy_points)
+galaxy_mesh.CreateExtentAttr(UsdGeom.PointBased(galaxy_mesh).ComputeExtent(galaxy_mesh.GetPointsAttr().Get()))
+galaxy_mesh.CreateFaceVertexCountsAttr([4,4])
+galaxy_mesh.CreateFaceVertexIndicesAttr([0,1,2,3, 3,2,1,0])
+
+tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+tex_coords.set(galaxy_texcoords)
+
+galaxy_material_key = f"{galaxy_prim_key}/material"
+galaxy_material = UsdShade.Material.Define(stage, galaxy_material_key)
+galaxy_pbr_shader = UsdShade.Shader.Define(stage, f"{galaxy_prim_key}/PBRShader")
+galaxy_pbr_shader.CreateIdAttr("UsdPreviewSurface")
+galaxy_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.0)
+galaxy_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+galaxy_material.CreateSurfaceOutput().ConnectToSource(galaxy_pbr_shader.ConnectableAPI(), "surface")
+
+galaxy_st_reader = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/stReader")
+galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
+
+galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
+galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
+galaxy_image_path = join("images", "milkywaybar.jpg")
+galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
+galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
+galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgb")
+
+galaxy_st_input = galaxy_material.CreateInput("frame:stPrimvarName", Sdf.ValueTypeNames.Token)
+galaxy_st_input.Set("st")
+galaxy_st_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).ConnectToSource(galaxy_st_input)
+
+galaxy_mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+UsdShade.MaterialBindingAPI(galaxy_mesh).Bind(galaxy_material)
 
     
 stage.GetRootLayer().Save()
