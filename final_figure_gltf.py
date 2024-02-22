@@ -7,11 +7,10 @@ from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Image, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Sampler, Scene, Attributes, Mesh, Buffer, \
     Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo, interpolation 
-from numpy import diag, array
 import operator
 import struct
 
-from common import get_bounds, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
+from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations
 
 
 # Overall configuration settings
@@ -25,15 +24,9 @@ GAUSSIAN_POINTS = 6
 # but galactocentric coordinates have the galaxy in the x-y plane
 # so we just need to account for that
 
-from numpy.random import multivariate_normal
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
     sigma_val /= 1000
-sigma = array([sigma_val] * 3)
-cov = diag(sigma**2)
-def sample_around(point, n=GAUSSIAN_POINTS):
-    return multivariate_normal(mean=point, cov=cov, size=n)
-
 
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     if row == 0:
@@ -66,7 +59,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
             translations[pt].append(tuple(x[pt] for x in diffs))
     
     positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
-    position_arrays = [list(sample_around(position)) + [position] for position in positions]
+    position_arrays = [list(sample_around(position, GAUSSIAN_POINTS, sigma_val)) + [position] for position in positions]
     sampled_positions = []
     for arr in position_arrays:
         sampled_positions.extend([list(x) for x in arr])

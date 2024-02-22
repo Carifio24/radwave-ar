@@ -1,6 +1,7 @@
 from os.path import join
 
 import numpy as np
+from numpy.random import multivariate_normal
 import pandas as pd
 
 __all__ = [
@@ -21,6 +22,12 @@ BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{CO
 
 N_POINTS = 89
 N_BEST_FIT_POINTS = 1500
+
+
+def sample_around(point, n, sigma_val):
+    sigma = np.array([sigma_val] * 3)
+    cov = np.diag(sigma ** 2)
+    return multivariate_normal(mean=point, cov=cov, size=n)
 
 
 def get_bounds():

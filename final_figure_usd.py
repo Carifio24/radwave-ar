@@ -1,16 +1,21 @@
+import math
 from os.path import extsep, join, splitext
 import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 from uuid import uuid4
 
-from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_PHASES, N_POINTS
+from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_PHASES, N_POINTS, sample_around
 
 
 # Overall configuration settings
 SCALE = True
-TRIM_GALAXY = False
+TRIM_GALAXY = True 
+GAUSSIAN_POINTS = 6
 
-from final_figure_gltf import TRIM_GALAXY
+sigma_val = 15 / math.sqrt(3)
+if SCALE:
+    sigma_val /= 1000
+
 def unique_id():
     return uuid4().hex
 
@@ -20,8 +25,19 @@ def bounding_box(center, radius):
 
 
 def get_positions(scale=False, clip_transforms=None):
-    positions = { pt: [] for pt in range(N_POINTS) }
     df = pd.read_csv(CLUSTER_FILEPATH)
+
+    # We don't need the translations for the USDZ animation
+    # but we need them to construct the future positions of the sampled points
+    translations = { pt: [] for pt in range(N_POINTS) }
+    initial_phase = df[df["phase"] == 0]
+    initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
+    sampled_positions = []
+    for position in initial_positions:
+        with_samples = list(sample_around(position, GAUSSIAN_POINTS, sigma_val)) + [position]
+        sampled_positions.extend([list(x) for x in with_samples])
+
     for phase in range(N_PHASES + 1):
         slice = df[df["phase"] == phase % 360]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
@@ -29,9 +45,16 @@ def get_positions(scale=False, clip_transforms=None):
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
+        diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
         for pt in range(N_POINTS):
-            positions[pt].append(tuple(c[pt] for c in xyz))
+            translations[pt].append(tuple(x[pt] for x in diffs))
 
+    positions = {}
+    for pt, pos in enumerate(sampled_positions):
+        original_index = pt // (GAUSSIAN_POINTS + 1)
+        pt_translations = translations[original_index]
+        positions[pt] = [tuple(tc + pc for tc, pc in zip(t, pos)) for t in pt_translations]
+        
     return positions
 
 
@@ -78,7 +101,7 @@ def add_sphere(stage, positions, timestamps, radius, material):
 
 output_directory = "out"
 
-radius = 0.01
+radius = 0.005
 best_fit_radius = 0.002
 time_delta = 0.01
 mins, maxes = get_bounds()
@@ -95,7 +118,7 @@ stage = Usd.Stage.CreateNew(output_filepath)
 
 default_prim = UsdGeom.Xform.Define(stage, "/world").GetPrim()
 stage.SetDefaultPrim(default_prim)
-UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
 
 material = UsdShade.Material.Define(stage, "/material")
 pbr_shader = UsdShade.Shader.Define(stage, "/material/PBRShader")
@@ -115,19 +138,26 @@ best_fit_material.CreateSurfaceOutput().ConnectToSource(bf_pbr_shader.Connectabl
 
 
 # Create a sphere for each point at phase=0
-for index in range(N_POINTS):
+for index in range(len(point_positions)):
     positions = point_positions[index]
     add_sphere(stage, positions, timestamps, radius, material)
 
-for index in range(N_BEST_FIT_POINTS):
+for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
     add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material)
+
+sun_position = [8121.97336612, 0., 0.]
+sun_world_position = sun_position
+if SCALE:
+    sun_position_columns = [[c] for c in sun_position]
+    sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
+    sun_position = [c[0] for c in sun_position_clip]
+
 
 
 # Now we need to set up the galaxy image
 galaxy_square_edge = 18_500
-sun_position = [8121.97336612, 0., 0.]
-shift = sun_position[0]
+shift = sun_world_position[0]
 shift_fraction = 0.5 * shift / galaxy_square_edge
 if TRIM_GALAXY:
     galaxy_fraction = 0.2
