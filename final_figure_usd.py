@@ -5,7 +5,9 @@ import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 from uuid import uuid4
 
-from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_PHASES, N_POINTS, sample_around
+from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around
+
+N_PHASES = 360
 
 # Overall configuration settings
 SCALE = True
@@ -108,7 +110,7 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = 0.005 if SCALE else 5
-best_fit_radius = 0.005 if SCALE else 5
+best_fit_radius = 0.0005 if SCALE else 0.5
 time_delta = 0.01
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
