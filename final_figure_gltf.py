@@ -7,11 +7,10 @@ from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Image, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Sampler, Scene, Attributes, Mesh, Buffer, \
     Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo, interpolation 
-from numpy import inf, diag, array
 import operator
 import struct
 
-from common import N_VISIBLE_PHASES, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations 
+from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations
 
 
 # Overall configuration settings
@@ -25,15 +24,9 @@ GAUSSIAN_POINTS = 6
 # but galactocentric coordinates have the galaxy in the x-y plane
 # so we just need to account for that
 
-from numpy.random import multivariate_normal
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
     sigma_val /= 1000
-sigma = array([sigma_val] * 3)
-cov = diag(sigma**2)
-def sample_around(point, n=GAUSSIAN_POINTS):
-    return multivariate_normal(mean=point, cov=cov, size=n)
-
 
 def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
     if row == 0:
@@ -42,30 +35,6 @@ def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
         return (theta_resolution - 2) * phi_resolution + 1
     else:
         return phi_resolution * (row - 1) + column + 1
-
-
-def get_bounds():
-    mins = [inf, inf, inf]
-    maxes = [-inf, -inf, -inf]
-    cluster_df = pd.read_csv(CLUSTER_FILEPATH)
-    best_fit_filepath = BEST_FIT_FILEPATH
-    best_fit_df = pd.read_csv(best_fit_filepath)
-    for phase in range(N_VISIBLE_PHASES + 1):
-        slice = cluster_df[cluster_df["phase"] == phase]
-        xyz = [slice[c] for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
-        for index, coord in enumerate(xyz):
-            mins[index] = min(mins[index], min(coord))
-            maxes[index] = max(maxes[index], max(coord))
-    
-        best_fit_phase = best_fit_df[best_fit_df["phase"] == phase]
-        best_fit_xyz = [best_fit_phase[c] for c in ["xc", "zc", "yc"]]
-        best_fit_xyz[0] = -best_fit_xyz[0]
-        for index, coord in enumerate(best_fit_xyz):
-            mins[index] = min(mins[index], min(coord))
-            maxes[index] = max(maxes[index], max(coord))
-
-    return mins, maxes
 
 
 # Note that these need to be overall translations (i.e. x(t) - x(0))
@@ -81,7 +50,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
     for phase in range(1, N_PHASES + 1):
         slice = df[df["phase"] == phase % 360]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
+        xyz[0] *= -1
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
@@ -90,7 +59,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
             translations[pt].append(tuple(x[pt] for x in diffs))
     
     positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
-    position_arrays = [list(sample_around(position)) + [position] for position in positions]
+    position_arrays = [list(sample_around(position, GAUSSIAN_POINTS, sigma_val)) + [position] for position in positions]
     sampled_positions = []
     for arr in position_arrays:
         sampled_positions.extend([list(x) for x in arr])
@@ -111,7 +80,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         bf_phase = phase % 360
         slice = df[df["phase"] == bf_phase]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
-        xyz[0] = -xyz[0]
+        xyz[0] *= -1
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
