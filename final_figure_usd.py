@@ -1,4 +1,5 @@
 import math
+from os import getcwd
 from os.path import extsep, join, splitext
 import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
@@ -9,12 +10,14 @@ from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FIL
 
 # Overall configuration settings
 SCALE = True
-TRIM_GALAXY = True 
+TRIM_GALAXY = True
+GALAXY_FRACTION = 0.2
 GAUSSIAN_POINTS = 6
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
     sigma_val /= 1000
+
 
 def unique_id():
     return uuid4().hex
@@ -32,6 +35,8 @@ def get_positions(scale=False, clip_transforms=None):
     translations = { pt: [] for pt in range(N_POINTS) }
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    if scale:
+        initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     initial_positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
     sampled_positions = []
     for position in initial_positions:
@@ -75,7 +80,7 @@ def get_best_fit_positions(scale=False, clip_transforms=None):
 
 
 def add_sphere(stage, positions, timestamps, radius, material):
-    xform_key = f"/world/xform_{unique_id()}"
+    xform_key = f"{default_prim_key}/xform_{unique_id()}"
     xform = UsdGeom.Xform.Define(stage, xform_key)
     sphere_key = f"{xform_key}/sphere_{unique_id()}"
     sphere = UsdGeom.Sphere.Define(stage, sphere_key)
@@ -96,13 +101,15 @@ def add_sphere(stage, positions, timestamps, radius, material):
     translation = sphere.AddTranslateOp()
     translation.Set(initial_position)
     for time, position in zip(timestamps, positions):
-        translation.Set(time=time, value=position)
+        delta = tuple(p - i for i, p in zip(initial_position, position))
+        translation.Set(time=time, value=delta)
 
 
-output_directory = "out"
+cwd = getcwd()
+output_directory = join(cwd, "out")
 
-radius = 0.005
-best_fit_radius = 0.002
+radius = 0.005 if SCALE else 5
+best_fit_radius = 0.005 if SCALE else 5
 time_delta = 0.01
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
@@ -112,13 +119,15 @@ point_positions = get_positions(scale=SCALE, clip_transforms=clip_transforms)
 best_fit_positions = get_best_fit_positions(scale=SCALE, clip_transforms=clip_transforms)
 
 # Set up the stage for our USD
+# Note that, just like with glTF, the default is that +y is up
 output_filename = "radwave.usdc"
 output_filepath = join(output_directory, output_filename)
 stage = Usd.Stage.CreateNew(output_filepath)
-
-default_prim = UsdGeom.Xform.Define(stage, "/world").GetPrim()
-stage.SetDefaultPrim(default_prim)
 UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+
+default_prim_key = "/world"
+default_prim = UsdGeom.Xform.Define(stage, default_prim_key).GetPrim()
+stage.SetDefaultPrim(default_prim)
 
 material = UsdShade.Material.Define(stage, "/material")
 pbr_shader = UsdShade.Shader.Define(stage, "/material/PBRShader")
@@ -136,6 +145,14 @@ bf_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
 bf_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((132 / 155, 215 / 255, 245 / 255))
 best_fit_material.CreateSurfaceOutput().ConnectToSource(bf_pbr_shader.ConnectableAPI(), "surface")
 
+sun_material = UsdShade.Material.Define(stage, "/sun_material")
+sun_pbr_shader = UsdShade.Shader.Define(stage, "/sun_material/PBRShader")
+sun_pbr_shader.CreateIdAttr("UsdPreviewSurface")
+sun_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.0)
+sun_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+sun_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((255/ 155, 255 / 255, 10 / 255))
+sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI(), "surface")
+
 
 # Create a sphere for each point at phase=0
 for index in range(len(point_positions)):
@@ -146,6 +163,7 @@ for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
     add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material)
 
+
 sun_position = [8121.97336612, 0., 0.]
 sun_world_position = sun_position
 if SCALE:
@@ -153,15 +171,16 @@ if SCALE:
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
     sun_position = [c[0] for c in sun_position_clip]
 
-
+# Add a sphere for the Sun
+sun_radius = 0.01 if SCALE else 10
+add_sphere(stage, [tuple(sun_position)], [], sun_radius, sun_material)
 
 # Now we need to set up the galaxy image
 galaxy_square_edge = 18_500
 shift = sun_world_position[0]
 shift_fraction = 0.5 * shift / galaxy_square_edge
 if TRIM_GALAXY:
-    galaxy_fraction = 0.2
-    galaxy_image_edge = galaxy_fraction * galaxy_square_edge
+    galaxy_image_edge = GALAXY_FRACTION * galaxy_square_edge
 else:
     galaxy_image_edge = galaxy_square_edge
 
@@ -178,9 +197,15 @@ if TRIM_GALAXY:
 # We determined that the galaxy image needs a 90 degree rotation
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
+#
+# NB: USD texture coordinates are "t-flipped" relative to glTF
+# i.e. if our glTF texture coordinates are (s, t)
+# then the corresponding USD coordinates are (s, 1-t)
+# (and vice versa, since this operation is an involution)
+# (https://openusd.org/release/spec_usdpreviewsurface.html#texture-coordinate-orientation-in-usd)
 slope = 0.5 / galaxy_square_edge
 intercept = slope * galaxy_square_edge
-texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
+texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, 0.5 - (0.5 / galaxy_square_edge) * x]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 
 if SCALE:
@@ -188,25 +213,39 @@ if SCALE:
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
 
-galaxy_prim_key = "/world/galaxy"
+galaxy_prim_key = f"{default_prim_key}/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
 galaxy_mesh_key = f"{galaxy_prim_key}/mesh"
 galaxy_mesh = UsdGeom.Mesh.Define(stage, galaxy_mesh_key)
 galaxy_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
 galaxy_mesh.CreatePointsAttr(galaxy_points)
-galaxy_mesh.CreateExtentAttr(UsdGeom.PointBased(galaxy_mesh).ComputeExtent(galaxy_mesh.GetPointsAttr().Get()))
-galaxy_mesh.CreateFaceVertexCountsAttr([4,4])
-galaxy_mesh.CreateFaceVertexIndicesAttr([0,1,2,3, 3,2,1,0])
+galaxy_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
+galaxy_mesh.CreateFaceVertexCountsAttr([4])
+galaxy_mesh.CreateFaceVertexIndicesAttr([0,1,2,3])
+
+galaxy_bottom_prim_key = f"{default_prim_key}/galaxy_bottom"
+galaxy_bottom_prim = stage.DefinePrim(galaxy_bottom_prim_key)
+galaxy_bottom_mesh_key = f"{galaxy_bottom_prim_key}/bottom_mesh"
+galaxy_bottom_mesh = UsdGeom.Mesh.Define(stage, galaxy_bottom_mesh_key)
+galaxy_bottom_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
+galaxy_bottom_mesh.CreatePointsAttr(galaxy_points)
+galaxy_bottom_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
+galaxy_bottom_mesh.CreateFaceVertexCountsAttr([4])
+galaxy_bottom_mesh.CreateFaceVertexIndicesAttr([3,2,1,0])
 
 tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
-tex_coords.set(galaxy_texcoords)
+tex_coords.Set(galaxy_texcoords)
+
+bottom_tex_coords = UsdGeom.PrimvarsAPI(galaxy_bottom_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+bottom_tex_coords.Set(galaxy_texcoords)
 
 galaxy_material_key = f"{galaxy_prim_key}/material"
 galaxy_material = UsdShade.Material.Define(stage, galaxy_material_key)
 galaxy_pbr_shader = UsdShade.Shader.Define(stage, f"{galaxy_prim_key}/PBRShader")
 galaxy_pbr_shader.CreateIdAttr("UsdPreviewSurface")
-galaxy_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.0)
+galaxy_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(1.0)
 galaxy_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+galaxy_pbr_shader.CreateInput("opacity", Sdf.ValueTypeNames.Float).Set(0.7)
 galaxy_material.CreateSurfaceOutput().ConnectToSource(galaxy_pbr_shader.ConnectableAPI(), "surface")
 
 galaxy_st_reader = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/stReader")
@@ -214,7 +253,7 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_path = join("images", "milkywaybar.jpg")
+galaxy_image_path = "milkywaybar.jpg"
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
 galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
@@ -226,6 +265,9 @@ galaxy_st_reader.CreateInput("varname", Sdf.ValueTypeNames.Token).ConnectToSourc
 
 galaxy_mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
 UsdShade.MaterialBindingAPI(galaxy_mesh).Bind(galaxy_material)
+
+galaxy_bottom_mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+UsdShade.MaterialBindingAPI(galaxy_bottom_mesh).Bind(galaxy_material)
 
     
 stage.GetRootLayer().Save()
