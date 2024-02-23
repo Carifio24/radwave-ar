@@ -12,10 +12,10 @@ import struct
 
 from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations
 
-
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
+GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
 
@@ -377,8 +377,7 @@ galaxy_square_edge = 18_500
 shift = sun_world_position[0]
 shift_fraction = 0.5 * shift / galaxy_square_edge
 if TRIM_GALAXY:
-    galaxy_fraction = 0.2
-    galaxy_image_edge = galaxy_fraction * galaxy_square_edge 
+    galaxy_image_edge = GALAXY_FRACTION * galaxy_square_edge 
 else:
     galaxy_image_edge = galaxy_square_edge
 

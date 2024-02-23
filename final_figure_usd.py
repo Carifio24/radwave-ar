@@ -7,11 +7,10 @@ from uuid import uuid4
 
 from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_PHASES, N_POINTS, sample_around
 
-
 # Overall configuration settings
 SCALE = True
 TRIM_GALAXY = True
-GALAXY_FRACTION = 0.2
+GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
 sigma_val = 15 / math.sqrt(3)
