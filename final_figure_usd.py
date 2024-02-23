@@ -234,10 +234,10 @@ galaxy_bottom_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge)
 galaxy_bottom_mesh.CreateFaceVertexCountsAttr([4])
 galaxy_bottom_mesh.CreateFaceVertexIndicesAttr([3,2,1,0])
 
-tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying)
 tex_coords.Set(galaxy_texcoords)
 
-bottom_tex_coords = UsdGeom.PrimvarsAPI(galaxy_bottom_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+bottom_tex_coords = UsdGeom.PrimvarsAPI(galaxy_bottom_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying)
 bottom_tex_coords.Set(galaxy_texcoords)
 
 galaxy_material_key = f"{galaxy_prim_key}/material"
