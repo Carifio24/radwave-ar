@@ -12,16 +12,16 @@ import struct
 
 from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations
 
-
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
+GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
 
 # Note that there are occasionally some funky coordinate things throughout
 # glTF is a right-handed +y coordinate system (so we want the galaxy in the x-z plane)
-# but galactocentric coordinates have the galaxy in the x-y plane
+# but galactocentric coordinates have the galaxy in the x-y planefinal
 # so we just need to account for that
 
 sigma_val = 15 / math.sqrt(3)
@@ -305,7 +305,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.5 * (0.001 if SCALE else 10)
+best_fit_radius = 0.5 * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
@@ -377,8 +377,7 @@ galaxy_square_edge = 18_500
 shift = sun_world_position[0]
 shift_fraction = 0.5 * shift / galaxy_square_edge
 if TRIM_GALAXY:
-    galaxy_fraction = 0.2
-    galaxy_image_edge = galaxy_fraction * galaxy_square_edge 
+    galaxy_image_edge = GALAXY_FRACTION * galaxy_square_edge 
 else:
     galaxy_image_edge = galaxy_square_edge
 
