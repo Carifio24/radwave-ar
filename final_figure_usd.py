@@ -5,15 +5,17 @@ import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 from uuid import uuid4
 
-from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around
+from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around, sphere_mesh
 
 N_PHASES = 360
 
 # Overall configuration settings
-SCALE = True
+SCALE = True 
+CLIP_SIZE = 10
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 6
+GAUSSIAN_POINTS = 5
+BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -65,55 +67,54 @@ def get_positions(scale=False, clip_transforms=None):
 
 
 def get_best_fit_positions(scale=False, clip_transforms=None):
-    positions = { pt: [] for pt in range(N_BEST_FIT_POINTS) }
+    positions = { pt: [] for pt in range(N_BEST_FIT_POINTS // BEST_FIT_DOWNSAMPLE_FACTOR) }
     df = pd.read_csv(BEST_FIT_FILEPATH)
     for phase in range(N_PHASES + 1):
-        slice = df[df["phase"] == phase % 360]
+        slice = df[df["phase"] == phase % 360][::BEST_FIT_DOWNSAMPLE_FACTOR]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
-        for pt in range(N_BEST_FIT_POINTS):
+        for pt in range(N_BEST_FIT_POINTS // BEST_FIT_DOWNSAMPLE_FACTOR):
             positions[pt].append(tuple(c[pt] for c in xyz))
 
     return positions
 
 
-def add_sphere(stage, positions, timestamps, radius, material):
+all_triangles = 0
+def add_sphere(stage, positions, timestamps, radius, material, theta_resolution=5, phi_resolution=5):
+    global all_triangles
+    initial_position = positions[0]
+    points, triangles = sphere_mesh(initial_position, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
+    all_triangles += len(triangles)
+
     xform_key = f"{default_prim_key}/xform_{unique_id()}"
     xform = UsdGeom.Xform.Define(stage, xform_key)
     sphere_key = f"{xform_key}/sphere_{unique_id()}"
-    sphere = UsdGeom.Sphere.Define(stage, sphere_key)
-
-    initial_position = positions[0]
-    UsdGeom.XformCommonAPI(xform).SetTranslate(initial_position)
-
-    extent_attr = sphere.GetExtentAttr()
-    radius_attr = sphere.GetRadiusAttr()
-
-    radius_attr.Set(radius)
-    bbox = bounding_box(initial_position, radius)
-    extent_attr.Set(bbox)
+    sphere = UsdGeom.Mesh.Define(stage, sphere_key)
+    sphere.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
+    sphere.CreatePointsAttr(points)
+    sphere.CreateExtentAttr(bounding_box(initial_position, radius))
+    sphere.CreateFaceVertexCountsAttr([3] * len(triangles))
+    sphere.CreateFaceVertexIndicesAttr([idx for tri in triangles for idx in tri])
 
     sphere.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
     UsdShade.MaterialBindingAPI(sphere).Bind(material)
 
     translation = sphere.AddTranslateOp()
-    translation.Set(initial_position)
     for time, position in zip(timestamps, positions):
         delta = tuple(p - i for i, p in zip(initial_position, position))
         translation.Set(time=time, value=delta)
 
-
 cwd = getcwd()
 output_directory = join(cwd, "out")
 
-radius = 0.005 if SCALE else 5
-best_fit_radius = 0.0005 if SCALE else 0.5
-time_delta = 0.01
+radius = CLIP_SIZE * (0.005 if SCALE else 5)
+best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
+time_delta = 0.2
 mins, maxes = get_bounds()
-clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
+clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
 timestamps = [time_delta * i for i in range(1, N_PHASES)]
 
 point_positions = get_positions(scale=SCALE, clip_transforms=clip_transforms)
@@ -158,7 +159,7 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 # Create a sphere for each point at phase=0
 for index in range(len(point_positions)):
     positions = point_positions[index]
-    add_sphere(stage, positions, timestamps, radius, material)
+    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=8, phi_resolution=12)
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
@@ -174,7 +175,7 @@ if SCALE:
 
 # Add a sphere for the Sun
 sun_radius = 0.01 if SCALE else 10
-add_sphere(stage, [tuple(sun_position)], [], sun_radius, sun_material)
+add_sphere(stage, [tuple(sun_position)], [], sun_radius, sun_material, theta_resolution=10, phi_resolution=15)
 
 # Now we need to set up the galaxy image
 galaxy_square_edge = 18_500
@@ -276,3 +277,5 @@ stage.GetRootLayer().Save()
 # Create a USDA file as well
 path, _ = splitext(output_filepath)
 stage.GetRootLayer().Export(f"{path}{extsep}usda")
+
+print(all_triangles)
