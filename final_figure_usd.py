@@ -159,7 +159,7 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 # Create a sphere for each point at phase=0
 for index in range(len(point_positions)):
     positions = point_positions[index]
-    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=10, phi_resolution=15)
+    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=8, phi_resolution=12)
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
@@ -255,7 +255,7 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_path = "milkywaybar_1024.jpg"
+galaxy_image_path = "milkywaybar.jpg"
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
 galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
