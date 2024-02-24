@@ -1,4 +1,3 @@
-from itertools import product
 import math
 from os.path import join
 import pandas as pd
@@ -10,7 +9,7 @@ from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Ima
 import operator
 import struct
 
-from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations
+from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, sphere_mesh_index
 
 # Overall configuration settings
 SCALE = True 
@@ -27,14 +26,6 @@ GAUSSIAN_POINTS = 6
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
     sigma_val /= 1000
-
-def sphere_mesh_index(row, column, theta_resolution, phi_resolution):
-    if row == 0:
-        return 0
-    elif row == theta_resolution - 1:
-        return (theta_resolution - 2) * phi_resolution + 1
-    else:
-        return phi_resolution * (row - 1) + column + 1
 
 
 # Note that these need to be overall translations (i.e. x(t) - x(0))
@@ -92,43 +83,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     return positions, translations
 
 
-# theta is the azimuthal angle here. Sorry math folks.
-# This gives a straightforward "grid"-style triangulation of a sphere with the given center and radius,
-# with tunable resolutions in theta and phi.
-def sphere_mesh(center, radius, theta_resolution=5, phi_resolution=5):
-    nonpole_thetas = [i * math.pi / theta_resolution for i in range(1, theta_resolution-1)]
-    phis = [i * 2 * math.pi / phi_resolution for i in range(phi_resolution)]
-    points = [(
-        center[0] + radius * math.cos(phi) * math.sin(theta),
-        center[1] + radius * math.sin(phi) * math.sin(theta),
-        center[2] + radius * math.cos(theta)
-    ) for theta, phi in product(nonpole_thetas, phis)]
-    points = [(center[0], center[1], center[2] + radius)] + points + [(center[0], center[1], center[2] - radius)]
-
-    # TODO: Make a cleaner way to handle "modular" aspect of rows
-    # Idea: Make column = column % phi_resolution in `sphere_mesh_index` ?
-    triangles = [(int(0), i + 1, i) for i in range(1, phi_resolution)]
-    tr, pr = theta_resolution, phi_resolution
-    triangles.append((0, 1, theta_resolution))
-    for row in range(1, theta_resolution - 2):
-        for col in range(phi_resolution):
-            rc_index = sphere_mesh_index(row, col, tr, pr)
-            triangles.append((rc_index, sphere_mesh_index(row+1, col, tr, pr), sphere_mesh_index(row+1, col-1, tr, pr)))
-            triangles.append((rc_index, sphere_mesh_index(row, col+1, tr, pr), sphere_mesh_index(row+1, col, tr, pr)))
-        triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row+1, pr-1, tr, pr), sphere_mesh_index(row+1, pr-2, tr, pr)))
-        triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row, 0, tr, pr), sphere_mesh_index(row+1, pr-1, tr, pr)))
-        
-    row = theta_resolution - 2
-    last_index = sphere_mesh_index(theta_resolution - 1, 0, tr, pr)
-    for col in range(phi_resolution-1):
-        triangles.append((sphere_mesh_index(row, col, tr, pr), sphere_mesh_index(row, col+1, tr, pr), last_index))
-    triangles.append((sphere_mesh_index(row, pr-1, tr, pr), sphere_mesh_index(row, 0, tr, pr), last_index))
-
-    return points, triangles
-
-
 output_directory = "out"
-
 
 # Let's set up our arrays and any constant values
 radius = 1 * (0.005 if SCALE else 5)
@@ -366,7 +321,7 @@ for index, point in enumerate(bf_positions):
 
 animation = Animation(name="Oscillating", channels=channels, samplers=animation_samplers)
 animations.append(animation)
-# animationinvisible_animation = Animation(name="Hiding", channels=invisible_channels, samplers=invisible_animation_samplers)
+# invisible_animation = Animation(name="Hiding", channels=invisible_channels, samplers=invisible_animation_samplers)
 # animations.append(invisible_animation)
 
 # Finally, let's create the galaxy texture

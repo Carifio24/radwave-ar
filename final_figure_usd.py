@@ -111,7 +111,7 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = CLIP_SIZE * (0.005 if SCALE else 5)
-best_fit_radius = 1.25 * CLIP_SIZE * (0.0005 if SCALE else 0.5)
+best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
@@ -159,11 +159,11 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 # Create a sphere for each point at phase=0
 for index in range(len(point_positions)):
     positions = point_positions[index]
-    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=5, phi_resolution=5)
+    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=10, phi_resolution=15)
 
-# for index in range(len(best_fit_positions)):
-#     positions = best_fit_positions[index]
-#     add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material)
+for index in range(len(best_fit_positions)):
+    positions = best_fit_positions[index]
+    add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material)
 
 
 sun_position = [8121.97336612, 0., 0.]
