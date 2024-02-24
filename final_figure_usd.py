@@ -11,10 +11,10 @@ N_PHASES = 360
 
 # Overall configuration settings
 SCALE = True 
-CLIP_SIZE = 10
+CLIP_SIZE = 25
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 5
+GAUSSIAN_POINTS = 4
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
@@ -163,7 +163,7 @@ for index in range(len(point_positions)):
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
-    add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material)
+    add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material, theta_resolution=4, phi_resolution=4)
 
 
 sun_position = [8121.97336612, 0., 0.]
