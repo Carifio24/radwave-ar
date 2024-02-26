@@ -205,9 +205,6 @@ for index, point in enumerate(positions):
     shell_points, shell_triangles = sphere_mesh(point, shell_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     shell_mins = [min([operator.itemgetter(i)(pt) for pt in shell_points]) for i in range(3)]
     shell_maxes = [max([operator.itemgetter(i)(pt) for pt in shell_points]) for i in range(3)]
-    if index == 0:
-        print(points)
-        print(shell_points)
 
     arr = bytearray()
     for point in points:
