@@ -14,7 +14,7 @@ from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEP
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
-CLIP_SIZE = 25
+CLIP_SIZE = 1
 GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
