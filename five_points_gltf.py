@@ -176,7 +176,7 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
+    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 0.3])),
     # Best-fit spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[132 / 255, 215 / 255, 245 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
@@ -483,5 +483,5 @@ model = GLTFModel(
     textures=[galaxy_texture]
 )
 gltf = GLTF(model=model, resources=file_resources)
-gltf.export(join(output_directory, "radwave.gltf"))
-gltf.export(join(output_directory, "radwave.glb"))
+gltf.export(join(output_directory, "color_test.gltf"))
+gltf.export(join(output_directory, "color_test.glb"))
