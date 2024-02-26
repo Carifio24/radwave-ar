@@ -111,8 +111,8 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = 0.5 * CLIP_SIZE * (0.005 if SCALE else 5)
-inner_shell_radius = 2 * radius
-outer_shell_radius = 3 * radius
+inner_shell_radius = 1.5 * radius
+outer_shell_radius = 2 * radius
 best_fit_radius = 2 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()

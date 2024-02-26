@@ -88,8 +88,8 @@ output_directory = "out"
 
 # Let's set up our arrays and any constant values
 radius = 0.5 * CLIP_SIZE * (0.005 if SCALE else 5)
-inner_shell_radius = 2 * radius
-outer_shell_radius = 3 * radius
+inner_shell_radius = 1.5 * radius
+outer_shell_radius = 2 * radius
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
