@@ -14,7 +14,7 @@ SCALE = True
 CLIP_SIZE = 25
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 4
+GAUSSIAN_POINTS = 2
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
@@ -110,7 +110,7 @@ def add_sphere(stage, positions, timestamps, radius, material, theta_resolution=
 cwd = getcwd()
 output_directory = join(cwd, "out")
 
-radius = CLIP_SIZE * (0.005 if SCALE else 5)
+radius = 1.75 * CLIP_SIZE * (0.005 if SCALE else 5)
 best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
