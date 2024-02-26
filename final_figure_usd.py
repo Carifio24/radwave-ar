@@ -14,7 +14,7 @@ SCALE = True
 CLIP_SIZE = 25
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 2
+GAUSSIAN_POINTS = 0
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
@@ -111,7 +111,8 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = 0.5 * CLIP_SIZE * (0.005 if SCALE else 5)
-shell_radius = 2 * radius
+inner_shell_radius = 2 * radius
+outer_shell_radius = 3 * radius
 best_fit_radius = 2 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
@@ -140,6 +141,24 @@ pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
 pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((31 / 255, 60 / 255, 241 / 255))
 material.CreateSurfaceOutput().ConnectToSource(pbr_shader.ConnectableAPI(), "surface")
 
+inner_shell_material = UsdShade.Material.Define(stage, "/inner_shell_material")
+inner_pbr_shader = UsdShade.Shader.Define(stage, "/inner_shell_material/PBRShader")
+inner_pbr_shader.CreateIdAttr("UsdPreviewSurface")
+inner_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+inner_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+inner_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((31 / 255, 60 / 255, 241 / 255))
+inner_pbr_shader.CreateInput("opacity", Sdf.ValueTypeNames.Float).Set(0.5)
+inner_shell_material.CreateSurfaceOutput().ConnectToSource(inner_pbr_shader.ConnectableAPI(), "surface")
+
+outer_shell_material = UsdShade.Material.Define(stage, "/outer_shell_material")
+outer_pbr_shader = UsdShade.Shader.Define(stage, "/outer_shell_material/PBRShader")
+outer_pbr_shader.CreateIdAttr("UsdPreviewSurface")
+outer_pbr_shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+outer_pbr_shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+outer_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((31 / 255, 60 / 255, 241 / 255))
+outer_pbr_shader.CreateInput("opacity", Sdf.ValueTypeNames.Float).Set(0.2)
+outer_shell_material.CreateSurfaceOutput().ConnectToSource(outer_pbr_shader.ConnectableAPI(), "surface")
+
 best_fit_material = UsdShade.Material.Define(stage, "/best_fit_material")
 bf_pbr_shader = UsdShade.Shader.Define(stage, "/best_fit_material/PBRShader")
 bf_pbr_shader.CreateIdAttr("UsdPreviewSurface")
@@ -161,7 +180,8 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 for index in range(len(point_positions)):
     positions = point_positions[index]
     add_sphere(stage, positions, timestamps, radius, material, theta_resolution=8, phi_resolution=12)
-    add_sphere(stage, positions, timestamps, shell_radius, material, theta_resolution=8, phi_resolution=12)
+    add_sphere(stage, positions, timestamps, inner_shell_radius, inner_shell_material, theta_resolution=8, phi_resolution=12)
+    add_sphere(stage, positions, timestamps, outer_shell_radius, outer_shell_material, theta_resolution=8, phi_resolution=12)
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
