@@ -14,6 +14,7 @@ from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEP
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
+CLIP_SIZE = 25
 GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
@@ -86,7 +87,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
 output_directory = "out"
 
 # Let's set up our arrays and any constant values
-radius = 1 * (0.005 if SCALE else 5)
+radius = CLIP_SIZE * (0.005 if SCALE else 5)
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -115,7 +116,7 @@ timestamps = [time_delta * i for i in range(1, N_PHASES)]
 min_time = min(timestamps)
 max_time = max(timestamps)
 mins, maxes = get_bounds()
-clip_transforms = clip_linear_transformations(list(zip(mins, maxes)))
+clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 time_barr = bytearray()
@@ -159,7 +160,7 @@ if SCALE:
     sun_position_columns = [[c] for c in sun_position]
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
     sun_position = [c[0] for c in sun_position_clip]
-sun_radius = 0.01 if SCALE else 10
+sun_radius = CLIP_SIZE * (0.01 if SCALE else 10)
 sun_points, sun_triangles = sphere_mesh(sun_position, sun_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
 sun_point_mins = [min([operator.itemgetter(i)(pt) for pt in sun_points]) for i in range(3)]
 sun_point_maxes = [max([operator.itemgetter(i)(pt) for pt in sun_points]) for i in range(3)]
@@ -260,7 +261,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.5 * (0.001 if SCALE else 1)
+best_fit_radius = 0.5 * CLIP_SIZE * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):

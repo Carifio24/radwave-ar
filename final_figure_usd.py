@@ -174,7 +174,7 @@ if SCALE:
     sun_position = [c[0] for c in sun_position_clip]
 
 # Add a sphere for the Sun
-sun_radius = 0.01 if SCALE else 10
+sun_radius = CLIP_SIZE * (0.01 if SCALE else 10)
 add_sphere(stage, [tuple(sun_position)], [], sun_radius, sun_material, theta_resolution=10, phi_resolution=15)
 
 # Now we need to set up the galaxy image
