@@ -110,8 +110,9 @@ def add_sphere(stage, positions, timestamps, radius, material, theta_resolution=
 cwd = getcwd()
 output_directory = join(cwd, "out")
 
-radius = 1.75 * CLIP_SIZE * (0.005 if SCALE else 5)
-best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
+radius = 0.5 * CLIP_SIZE * (0.005 if SCALE else 5)
+shell_radius = 2 * radius
+best_fit_radius = 2 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
@@ -160,6 +161,7 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 for index in range(len(point_positions)):
     positions = point_positions[index]
     add_sphere(stage, positions, timestamps, radius, material, theta_resolution=8, phi_resolution=12)
+    add_sphere(stage, positions, timestamps, shell_radius, material, theta_resolution=8, phi_resolution=12)
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]

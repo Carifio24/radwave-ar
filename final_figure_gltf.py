@@ -16,7 +16,7 @@ SCALE = True
 TRIM_GALAXY = True 
 CLIP_SIZE = 1
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 6
+GAUSSIAN_POINTS = 6 
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -87,7 +87,8 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
 output_directory = "out"
 
 # Let's set up our arrays and any constant values
-radius = CLIP_SIZE * (0.005 if SCALE else 5)
+radius = 0.5 * CLIP_SIZE * (0.005 if SCALE else 5)
+shell_radius = 2 * radius
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -104,7 +105,9 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
+    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
+    # Translucent shells
+    Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 0.5])),
     # Best-fit spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[132 / 255, 215 / 255, 245 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
@@ -199,6 +202,12 @@ for index, point in enumerate(positions):
     points, triangles = sphere_mesh(point, radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
     point_mins = [min([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
     point_maxes = [max([operator.itemgetter(i)(pt) for pt in points]) for i in range(3)]
+    shell_points, shell_triangles = sphere_mesh(point, shell_radius, theta_resolution=theta_resolution, phi_resolution=phi_resolution)
+    shell_mins = [min([operator.itemgetter(i)(pt) for pt in shell_points]) for i in range(3)]
+    shell_maxes = [max([operator.itemgetter(i)(pt) for pt in shell_points]) for i in range(3)]
+    if index == 0:
+        print(points)
+        print(shell_points)
 
     arr = bytearray()
     for point in points:
@@ -208,6 +217,14 @@ for index, point in enumerate(positions):
     for triangle in triangles:
         for idx in triangle:
             arr.extend(struct.pack('I', idx))
+    shell_offset = len(arr)
+    for point in shell_points:
+        for coord in point:
+            arr.extend(struct.pack('f', coord))
+    shell_triangles_offset = len(arr)
+    for triangle in shell_triangles:
+        for idx in triangle:
+            arr.extend(struct.pack('I', idx))
 
     # Set up the position and indices (triangulation) for this cluster
     # The main thing here is to make sure that our indices to buffers/views/accessors are correct
@@ -215,15 +232,25 @@ for index, point in enumerate(positions):
     buffer = Buffer(byteLength=len(arr), uri=bin)
     buffers.append(buffer)
     positions_view = BufferView(buffer=len(buffers)-1, byteLength=triangles_offset, target=BufferTarget.ARRAY_BUFFER.value)
-    indices_view = BufferView(buffer=len(buffers)-1, byteLength=len(arr)-triangles_offset, byteOffset=triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
+    indices_view = BufferView(buffer=len(buffers)-1, byteLength=shell_offset, byteOffset=triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
+    shell_positions_view = BufferView(buffer=len(buffers)-1, byteLength=shell_triangles_offset-shell_offset, byteOffset=shell_offset, target=BufferTarget.ARRAY_BUFFER.value)
+    shell_indices_view = BufferView(buffer=len(buffers)-1, byteLength=len(arr)-shell_triangles_offset, byteOffset=shell_triangles_offset, target=BufferTarget.ELEMENT_ARRAY_BUFFER.value)
     buffer_views.append(positions_view)
     buffer_views.append(indices_view)
-    positions_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.FLOAT.value, count=POINTS_PER_SPHERE, type=AccessorType.VEC3.value, min=point_mins, max=point_maxes)
-    indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.UNSIGNED_INT.value, count=len(triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[POINTS_PER_SPHERE-1])
+    buffer_views.append(shell_positions_view)
+    buffer_views.append(shell_indices_view)
+    positions_accessor = Accessor(bufferView=len(buffer_views)-4, componentType=ComponentType.FLOAT.value, count=POINTS_PER_SPHERE, type=AccessorType.VEC3.value, min=point_mins, max=point_maxes)
+    indices_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.UNSIGNED_INT.value, count=len(triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[POINTS_PER_SPHERE-1])
+    shell_positions_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.FLOAT.value, count=POINTS_PER_SPHERE, type=AccessorType.VEC3.value, min=shell_mins, max=shell_maxes)
+    shell_indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.UNSIGNED_INT.value, count=len(shell_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[POINTS_PER_SPHERE-1])
     accessors.append(positions_accessor)
     accessors.append(indices_accessor)
+    accessors.append(shell_positions_accessor)
+    accessors.append(shell_indices_accessor)
     file_resources.append(FileResource(bin, data=arr))
-    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=0)]))
+    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-4), indices=len(accessors)-3, material=0)]))
+    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=1)]))
+    nodes.append(Node(mesh=len(meshes)-2))
     nodes.append(Node(mesh=len(meshes)-1))
 
     # Set up the buffer/view/accessor for the animation data for this point
@@ -246,11 +273,16 @@ for index, point in enumerate(positions):
     diff_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=N_PHASES-1,
                              type=AccessorType.VEC3.value, min=diff_mins, max=diff_maxes)
     accessors.append(diff_accessor)
-    target = Target(node=len(nodes)-1, path="translation")
+
+    # Add targets for both the inner sphere and the shell
+    target = Target(node=len(nodes)-2, path="translation")
+    shell_target = Target(node=len(nodes)-1, path="translation")
     sampler = AnimationSampler(input=time_accessor_index, interpolation="LINEAR", output=len(accessors)-1)
     animation_samplers.append(sampler)
     channel = Channel(target=target, sampler=len(animation_samplers)-1)
+    shell_channel = Channel(target=shell_target, sampler=len(animation_samplers)-1)
     channels.append(channel)
+    channels.append(shell_channel)
 
     # Make the "invisible" animation for each point
     # invisible_target = Target(node=len(nodes)-1, path="scale")
@@ -261,7 +293,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.5 * CLIP_SIZE * (0.001 if SCALE else 1)
+best_fit_radius = CLIP_SIZE * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
@@ -292,7 +324,7 @@ for index, point in enumerate(bf_positions):
     accessors.append(positions_accessor)
     accessors.append(indices_accessor)
     file_resources.append(FileResource(bin, data=arr))
-    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=1)]))
+    meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=2)]))
     nodes.append(Node(mesh=len(meshes)-1))
 
     # Set up the buffer/view/accessor for the animation data for this point
