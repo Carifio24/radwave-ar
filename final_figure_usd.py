@@ -111,7 +111,7 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = 1.75 * CLIP_SIZE * (0.005 if SCALE else 5)
-best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
+best_fit_radius = 2 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)

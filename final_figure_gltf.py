@@ -261,7 +261,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.5 * CLIP_SIZE * (0.001 if SCALE else 1)
+best_fit_radius = CLIP_SIZE * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
