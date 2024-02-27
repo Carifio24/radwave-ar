@@ -9,19 +9,19 @@ from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Ima
 import operator
 import struct
 
-from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, sphere_mesh_index
+from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, rotate_y_nparrays, Y_ROTATION_ANGLE
 
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
-CLIP_SIZE = 1
+CLIP_SIZE = 10
 GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
 
 # Note that there are occasionally some funky coordinate things throughout
 # glTF is a right-handed +y coordinate system (so we want the galaxy in the x-z plane)
-# but galactocentric coordinates have the galaxy in the x-y planefinal
+# but galactocentric coordinates have the galaxy in the x-y plane
 # so we just need to account for that
 
 sigma_val = 15 / math.sqrt(3)
@@ -35,6 +35,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(CLUSTER_FILEPATH)
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
     translations = { pt: [] for pt in range(N_POINTS * GAUSSIAN_POINTS) }
 
     if scale:
@@ -44,6 +45,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -64,6 +66,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(BEST_FIT_FILEPATH)
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
     translations = { pt: [] for pt in range(initial_phase.shape[0]) }
 
     if scale:
@@ -74,6 +77,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -156,6 +160,7 @@ time_accessor_index = len(accessors) - 1
 # Add in the Sun
 sun_position = [8121.97336612, 0., 0.]
 sun_world_position = sun_position
+sun_position = rotate_y_list([sun_position], Y_ROTATION_ANGLE)[0]
 if SCALE:
     sun_position_columns = [[c] for c in sun_position]
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
@@ -343,8 +348,9 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
-    galaxy_points = [[p[0] + shift, p[1], p[2]] for p in galaxy_points]
+    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 # This is the transformation from world space -> galaxy texture space
 # We determined that the galaxy image needs a 90 degree rotation
@@ -355,6 +361,7 @@ intercept = slope * galaxy_square_edge
 texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 
+galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
     galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
