@@ -11,10 +11,10 @@ N_PHASES = 360
 
 # Overall configuration settings
 SCALE = True 
-CLIP_SIZE = 25
+CLIP_SIZE = 30
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 2
+GAUSSIAN_POINTS = 6
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)

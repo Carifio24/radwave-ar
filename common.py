@@ -18,7 +18,7 @@ output_directory = "out"
 COORDINATES = "galactic"
 CLUSTER_FILEPATH = join("data", "RW_cluster_oscillation_phase_updated_galactocentric.csv")
 
-Y_ROTATION_ANGLE = 165 * math.pi / 180
+Y_ROTATION_ANGLE = 180 * (math.pi / 180)
 
 BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_galactocentric.csv")
 BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")

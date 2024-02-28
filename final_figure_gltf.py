@@ -14,7 +14,7 @@ from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS,
 # Overall configuration settings
 SCALE = True 
 TRIM_GALAXY = True 
-CLIP_SIZE = 10
+CLIP_SIZE = 1
 GALAXY_FRACTION = 0.09
 GAUSSIAN_POINTS = 6
 
@@ -108,7 +108,7 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
+    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1], roughnessFactor=1, metallicFactor=0)),
     # Best-fit spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[132 / 255, 215 / 255, 245 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
@@ -192,7 +192,7 @@ sun_indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=Co
 accessors.append(sun_position_accessor)
 accessors.append(sun_indices_accessor)
 file_resources.append(FileResource(sun_bin, data=sun_barr))
-sun_material = Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[255 / 255, 255 / 255, 10 / 255, 1]))
+sun_material = Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[255 / 255, 255 / 255, 10 / 255, 1], roughnessFactor=0, metallicFactor=0))
 materials.append(sun_material)
 meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=len(materials)-1)]))
 nodes.append(Node(mesh=len(meshes)-1))
@@ -367,6 +367,10 @@ if SCALE:
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
 
+galaxy_point_mins = [min([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
+galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
+
+
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
@@ -377,7 +381,7 @@ galaxy_sampler = Sampler()
 samplers = [galaxy_sampler]
 galaxy_texture = Texture(source=0, sampler=len(samplers)-1)
 galaxy_texture_info = TextureInfo(index=0)
-materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.75], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
+materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.7], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
 
 galaxy_barr = bytearray()
 for point in galaxy_points:
@@ -403,7 +407,7 @@ buffer_views.append(galaxy_indices_view)
 buffer_views.append(galaxy_texcoords_view)
 galaxy_texcoord_mins = [min([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
 galaxy_texcoord_maxes = [max([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
-galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
+galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_point_mins, max=galaxy_point_maxes)
 galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
 galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=galaxy_texcoord_mins, max=galaxy_texcoord_maxes)
 accessors.append(galaxy_positions_accessor)
