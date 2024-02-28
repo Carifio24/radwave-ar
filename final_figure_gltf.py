@@ -9,7 +9,7 @@ from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Ima
 import operator
 import struct
 
-from common import get_bounds, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, sphere_mesh_index
+from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, rotate_y_nparrays, Y_ROTATION_ANGLE
 
 # Overall configuration settings
 SCALE = True 
@@ -21,7 +21,7 @@ GAUSSIAN_POINTS = 6
 
 # Note that there are occasionally some funky coordinate things throughout
 # glTF is a right-handed +y coordinate system (so we want the galaxy in the x-z plane)
-# but galactocentric coordinates have the galaxy in the x-y planefinal
+# but galactocentric coordinates have the galaxy in the x-y plane
 # so we just need to account for that
 
 sigma_val = 15 / math.sqrt(3)
@@ -35,6 +35,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(CLUSTER_FILEPATH)
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
     translations = { pt: [] for pt in range(N_POINTS * GAUSSIAN_POINTS) }
 
     if scale:
@@ -44,6 +45,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -64,6 +66,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(BEST_FIT_FILEPATH)
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
     translations = { pt: [] for pt in range(initial_phase.shape[0]) }
 
     if scale:
@@ -74,6 +77,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -104,7 +108,7 @@ invisible_channels = []
 animations = []
 materials = [
     # Cluster spheres
-    Material( pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1])),
+    Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[31 / 255, 94 / 255, 241 / 255, 1], roughnessFactor=1, metallicFactor=0)),
     # Best-fit spheres
     Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[132 / 255, 215 / 255, 245 / 255, 1], metallicFactor=0, roughnessFactor=0)),
 ]
@@ -156,6 +160,7 @@ time_accessor_index = len(accessors) - 1
 # Add in the Sun
 sun_position = [8121.97336612, 0., 0.]
 sun_world_position = sun_position
+sun_position = rotate_y_list([sun_position], Y_ROTATION_ANGLE)[0]
 if SCALE:
     sun_position_columns = [[c] for c in sun_position]
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
@@ -187,7 +192,7 @@ sun_indices_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=Co
 accessors.append(sun_position_accessor)
 accessors.append(sun_indices_accessor)
 file_resources.append(FileResource(sun_bin, data=sun_barr))
-sun_material = Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[255 / 255, 255 / 255, 10 / 255, 1]))
+sun_material = Material(pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[255 / 255, 255 / 255, 10 / 255, 1], roughnessFactor=0, metallicFactor=0))
 materials.append(sun_material)
 meshes.append(Mesh(primitives=[Primitive(attributes=Attributes(POSITION=len(accessors)-2), indices=len(accessors)-1, material=len(materials)-1)]))
 nodes.append(Node(mesh=len(meshes)-1))
@@ -261,7 +266,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = 0.5 * CLIP_SIZE * (0.001 if SCALE else 1)
+best_fit_radius = CLIP_SIZE * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
@@ -343,8 +348,9 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
-    galaxy_points = [[p[0] + shift, p[1], p[2]] for p in galaxy_points]
+    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 # This is the transformation from world space -> galaxy texture space
 # We determined that the galaxy image needs a 90 degree rotation
@@ -355,10 +361,15 @@ intercept = slope * galaxy_square_edge
 texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 
+galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
     galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
+
+galaxy_point_mins = [min([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
+galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
+
 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
@@ -370,7 +381,7 @@ galaxy_sampler = Sampler()
 samplers = [galaxy_sampler]
 galaxy_texture = Texture(source=0, sampler=len(samplers)-1)
 galaxy_texture_info = TextureInfo(index=0)
-materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.75], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
+materials.append(Material(alphaMode="BLEND", pbrMetallicRoughness=PBRMetallicRoughness(baseColorFactor=[1, 1, 1, 0.7], baseColorTexture=galaxy_texture_info, metallicFactor=0, roughnessFactor=1)))
 
 galaxy_barr = bytearray()
 for point in galaxy_points:
@@ -396,7 +407,7 @@ buffer_views.append(galaxy_indices_view)
 buffer_views.append(galaxy_texcoords_view)
 galaxy_texcoord_mins = [min([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
 galaxy_texcoord_maxes = [max([operator.itemgetter(i)(coord) for coord in galaxy_texcoords]) for i in range(2)]
-galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_points[2], max=galaxy_points[0])
+galaxy_positions_accessor = Accessor(bufferView=len(buffer_views)-3, componentType=ComponentType.FLOAT.value, count=len(galaxy_points), type=AccessorType.VEC3.value, min=galaxy_point_mins, max=galaxy_point_maxes)
 galaxy_indices_accessor = Accessor(bufferView=len(buffer_views)-2, componentType=ComponentType.UNSIGNED_INT.value, count=len(galaxy_triangles) * 3, type=AccessorType.SCALAR.value, min=[0], max=[3])
 galaxy_texcoords_accessor = Accessor(bufferView=len(buffer_views)-1, componentType=ComponentType.FLOAT.value, count=len(galaxy_texcoords), type=AccessorType.VEC2.value, min=galaxy_texcoord_mins, max=galaxy_texcoord_maxes)
 accessors.append(galaxy_positions_accessor)

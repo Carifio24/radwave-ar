@@ -11,13 +11,14 @@ __all__ = [
 ]
 
 N_VISIBLE_PHASES = 270
-N_PHASES = 720
+N_PHASES = 360 
 output_directory = "out"
 
 
 COORDINATES = "galactic"
 CLUSTER_FILEPATH = join("data", "RW_cluster_oscillation_phase_updated_galactocentric.csv")
 
+Y_ROTATION_ANGLE = 180 * (math.pi / 180)
 
 BEST_FIT_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_galactocentric.csv")
 BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{COORDINATES}_downsampled.csv")
@@ -25,6 +26,14 @@ BEST_FIT_DOWNSAMPLED_FILEPATH = join("data", f"RW_best_fit_oscillation_phase_{CO
 N_POINTS = 89
 N_BEST_FIT_POINTS = 1500
 
+def rotate_y_nparrays(xyz, theta):
+    x, y, z = xyz
+    x_rot = math.cos(theta) * x + math.sin(theta) * z
+    z_rot = -math.sin(theta) * x + math.cos(theta) * z
+    return [x_rot, y, z_rot]
+
+def rotate_y_list(xyz, theta):
+    return [[math.cos(theta) * p[0] + math.sin(theta) * p[2], p[1], -math.sin(theta) * p[0] + math.cos(theta) * p[2]] for p in xyz]
 
 # theta is the azimuthal angle here. Sorry math folks.
 # This gives a straightforward "grid"-style triangulation of a sphere with the given center and radius,
@@ -82,12 +91,13 @@ def get_bounds():
     cluster_df = pd.read_csv(CLUSTER_FILEPATH)
     best_fit_filepath = BEST_FIT_FILEPATH
     best_fit_df = pd.read_csv(best_fit_filepath)
-    for phase in range(N_VISIBLE_PHASES + 1):
+    for phase in range(N_PHASES):
         for df in (cluster_df, best_fit_df):
             slice = df[df["phase"] == phase]
             xyz = [slice[c] for c in ["xc", "zc", "yc"]]
             xyz[0] *= -1
             xyz[1] -= 20.8
+            xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
             for index, coord in enumerate(xyz):
                 mins[index] = min(mins[index], min(coord))
                 maxes[index] = max(maxes[index], max(coord))

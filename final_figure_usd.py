@@ -5,16 +5,16 @@ import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 from uuid import uuid4
 
-from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around, sphere_mesh
+from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around, sphere_mesh, Y_ROTATION_ANGLE, rotate_y_list, rotate_y_nparrays
 
 N_PHASES = 360
 
 # Overall configuration settings
 SCALE = True 
-CLIP_SIZE = 25
+CLIP_SIZE = 30
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 2
+GAUSSIAN_POINTS = 6
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
@@ -38,6 +38,7 @@ def get_positions(scale=False, clip_transforms=None):
     translations = { pt: [] for pt in range(N_POINTS) }
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
+    initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     initial_positions = [tuple(c[i] for c in initial_xyz) for i in range(N_POINTS)]
@@ -51,6 +52,7 @@ def get_positions(scale=False, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
@@ -74,6 +76,7 @@ def get_best_fit_positions(scale=False, clip_transforms=None):
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
+        xyz = rotate_y_nparrays(xyz, Y_ROTATION_ANGLE)
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         for pt in range(N_BEST_FIT_POINTS // BEST_FIT_DOWNSAMPLE_FACTOR):
@@ -111,7 +114,7 @@ cwd = getcwd()
 output_directory = join(cwd, "out")
 
 radius = 1.75 * CLIP_SIZE * (0.005 if SCALE else 5)
-best_fit_radius = 1.25 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
+best_fit_radius = 2 * CLIP_SIZE * math.sqrt(BEST_FIT_DOWNSAMPLE_FACTOR) * (0.0005 if SCALE else 0.5)
 time_delta = 0.2
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
@@ -168,6 +171,7 @@ for index in range(len(best_fit_positions)):
 
 sun_position = [8121.97336612, 0., 0.]
 sun_world_position = sun_position
+sun_position = rotate_y_list([sun_position], Y_ROTATION_ANGLE)[0]
 if SCALE:
     sun_position_columns = [[c] for c in sun_position]
     sun_position_clip = bring_into_clip(sun_position_columns, clip_transforms)
@@ -192,8 +196,9 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
-    galaxy_points = [[p[0] + shift, p[1], p[2]] for p in galaxy_points]
+    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 # This is the transformation from world space -> galaxy texture space
 # We determined that the galaxy image needs a 90 degree rotation
@@ -210,6 +215,7 @@ intercept = slope * galaxy_square_edge
 texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, 0.5 - (0.5 / galaxy_square_edge) * x]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 
+galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
     galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
