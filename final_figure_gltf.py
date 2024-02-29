@@ -16,7 +16,7 @@ SCALE = True
 TRIM_GALAXY = True 
 CLIP_SIZE = 1
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 6
+GAUSSIAN_POINTS = 0
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -36,7 +36,7 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
     initial_phase = df[df["phase"] == 0]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
     initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
-    translations = { pt: [] for pt in range(N_POINTS * GAUSSIAN_POINTS) }
+    translations = { pt: [] for pt in range(N_POINTS) }
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
@@ -91,7 +91,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
 output_directory = "out"
 
 # Let's set up our arrays and any constant values
-radius = CLIP_SIZE * (0.005 if SCALE else 5)
+radius = 1.75 * CLIP_SIZE * (0.005 if SCALE else 5)
 theta_resolution = 10
 phi_resolution = 15
 POINTS_PER_SPHERE = phi_resolution * (theta_resolution - 2) + 2
@@ -122,6 +122,7 @@ max_time = max(timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
+print(len(positions))
 
 time_barr = bytearray()
 for time in timestamps:

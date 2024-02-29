@@ -5,16 +5,14 @@ import pandas as pd
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
 from uuid import uuid4
 
-from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, sample_around, sphere_mesh, Y_ROTATION_ANGLE, rotate_y_list, rotate_y_nparrays
-
-N_PHASES = 360
+from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, N_PHASES, sample_around, sphere_mesh, Y_ROTATION_ANGLE, rotate_y_list, rotate_y_nparrays
 
 # Overall configuration settings
 SCALE = True 
 CLIP_SIZE = 30
 TRIM_GALAXY = True
 GALAXY_FRACTION = 0.09
-GAUSSIAN_POINTS = 6
+GAUSSIAN_POINTS = 0
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 sigma_val = 15 / math.sqrt(3)
