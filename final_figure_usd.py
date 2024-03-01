@@ -14,6 +14,7 @@ TRIM_GALAXY = True
 GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
+CIRCLE_FRACTION = 1172 / 1417
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -217,6 +218,9 @@ if SCALE:
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
 
+galaxy_center = [0.25 * sum(p[i] for p in galaxy_points) for i in range(3)]
+circle_radius = CIRCLE_FRACTION * galaxy_image_edge
+
 galaxy_prim_key = f"{default_prim_key}/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
 galaxy_mesh_key = f"{galaxy_prim_key}/mesh"
@@ -257,12 +261,12 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_filename = "RadWave_spherical_image.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
-galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
-galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgb")
+galaxy_diffuse_texture_sampler.CreateOutput("rgba", Sdf.ValueTypeNames.Float4)
+galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color4f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgba")
 
 galaxy_st_input = galaxy_material.CreateInput("frame:stPrimvarName", Sdf.ValueTypeNames.Token)
 galaxy_st_input.Set("st")

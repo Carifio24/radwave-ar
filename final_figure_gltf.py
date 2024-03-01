@@ -371,7 +371,7 @@ galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-galaxy_image_filename = "RadWave_spherical_image.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
