@@ -5,7 +5,7 @@ from gltflib.gltf import GLTF
 from gltflib.gltf_resource import FileResource
 from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Image, PBRMetallicRoughness, Primitive, \
     ComponentType, GLTFModel, Node, Sampler, Scene, Attributes, Mesh, Buffer, \
-    Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo, interpolation 
+    Animation, AnimationSampler, Channel, Target, Material, Texture, TextureInfo
 import operator
 import struct
 
@@ -15,7 +15,7 @@ from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS,
 SCALE = True 
 TRIM_GALAXY = True 
 CLIP_SIZE = 1
-GALAXY_FRACTION = 0.09
+GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
 
 
@@ -122,7 +122,6 @@ max_time = max(timestamps)
 mins, maxes = get_bounds()
 clip_transforms = clip_linear_transformations(list(zip(mins, maxes)), clip_size=CLIP_SIZE)
 positions, translations = get_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
-print(len(positions))
 
 time_barr = bytearray()
 for time in timestamps:
@@ -353,14 +352,12 @@ shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
     galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
-# This is the transformation from world space -> galaxy texture space
-# We determined that the galaxy image needs a 90 degree rotation
-# and so this affine transformation accounts for that.
-# It's easier if we do this before we scale
-slope = 0.5 / galaxy_square_edge
-intercept = slope * galaxy_square_edge
-texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
-galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+# Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
+# But now we have the MW slice image with the fadeout, so we just use different images based on the
+# TRIM_GALAXY flag
+# Note that the original image (and thus the slice) need a 90 degree rotation
+# so the texture coordinates reflect that
+galaxy_texcoords = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
@@ -371,11 +368,11 @@ if SCALE:
 galaxy_point_mins = [min([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
 galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) for i in range(3)]
 
-
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-galaxy_image_path = join("images", "milkywaybar.jpg")
+galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
 galaxy_sampler = Sampler()

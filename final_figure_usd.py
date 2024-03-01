@@ -11,9 +11,10 @@ from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FIL
 SCALE = True 
 CLIP_SIZE = 30
 TRIM_GALAXY = True
-GALAXY_FRACTION = 0.09
+GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
+CIRCLE_FRACTION = 1172 / 1417
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -198,26 +199,27 @@ shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
     galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
-# This is the transformation from world space -> galaxy texture space
-# We determined that the galaxy image needs a 90 degree rotation
-# and so this affine transformation accounts for that.
-# It's easier if we do this before we scale
-#
+# Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
+# But now we have the MW slice image with the fadeout, so we just use different images based on the
+# TRIM_GALAXY flag
+# Note that the original image (and thus the slice) need a 90 degree rotation
+# so the texture coordinates reflect that
+# 
 # NB: USD texture coordinates are "t-flipped" relative to glTF
 # i.e. if our glTF texture coordinates are (s, t)
 # then the corresponding USD coordinates are (s, 1-t)
 # (and vice versa, since this operation is an involution)
 # (https://openusd.org/release/spec_usdpreviewsurface.html#texture-coordinate-orientation-in-usd)
-slope = 0.5 / galaxy_square_edge
-intercept = slope * galaxy_square_edge
-texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, 0.5 - (0.5 / galaxy_square_edge) * x]
-galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+galaxy_texcoords = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
     galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
+
+galaxy_center = [0.25 * sum(p[i] for p in galaxy_points) for i in range(3)]
+circle_radius = CIRCLE_FRACTION * galaxy_image_edge
 
 galaxy_prim_key = f"{default_prim_key}/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
@@ -259,11 +261,12 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_path = "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
-galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
-galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgb")
+galaxy_diffuse_texture_sampler.CreateOutput("rgba", Sdf.ValueTypeNames.Float4)
+galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color4f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgba")
 
 galaxy_st_input = galaxy_material.CreateInput("frame:stPrimvarName", Sdf.ValueTypeNames.Token)
 galaxy_st_input.Set("st")
