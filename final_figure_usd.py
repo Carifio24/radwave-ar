@@ -14,7 +14,7 @@ TRIM_GALAXY = True
 GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
-CIRCLE_FRACTION = 1172 / 1417
+CIRCLE_FRACTION = 1144 / 1417
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -191,14 +191,10 @@ if TRIM_GALAXY:
     galaxy_image_edge = GALAXY_FRACTION * galaxy_square_edge
 else:
     galaxy_image_edge = galaxy_square_edge
-circle_radius = CIRCLE_FRACTION * galaxy_image_edge
+circle_radius = CIRCLE_FRACTION * galaxy_image_edge * 1.01
 
 circle_points = 100
-galaxy_points = [[math.cos(2 * math.pi * i / circle_points), 0, math.sin(2 * math.pi * i / circle_points)] for i in range(circle_points)]
-
-shift_point = [shift, 0, 0]
-if TRIM_GALAXY:
-    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
+galaxy_points = [[circle_radius * math.cos(2 * math.pi * i / circle_points), 0, circle_radius * math.sin(2 * math.pi * i / circle_points)] for i in range(circle_points)]
 
 # Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
 # But now we have the MW slice image with the fadeout, so we just use different images based on the
@@ -215,16 +211,18 @@ if TRIM_GALAXY:
 # We determined that the galaxy image needs a 90 degree rotation
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
-texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
+texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, (0.5 / galaxy_image_edge) * x + 0.5]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+
+shift_point = [shift, 0, 0]
+if TRIM_GALAXY:
+    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
     galaxy_point_columns = [[c[i] for c in galaxy_points] for i in range(3)]
     galaxy_points_clip = bring_into_clip(galaxy_point_columns, clip_transforms)
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
-
-galaxy_center = [0.25 * sum(p[i] for p in galaxy_points) for i in range(3)]
 
 galaxy_prim_key = f"{default_prim_key}/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
