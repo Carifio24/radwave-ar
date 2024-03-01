@@ -2,7 +2,7 @@ import math
 from os import getcwd
 from os.path import extsep, join, splitext
 import pandas as pd
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 from uuid import uuid4
 
 from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FILEPATH, bring_into_clip, clip_linear_transformations, N_POINTS, N_PHASES, sample_around, sphere_mesh, Y_ROTATION_ANGLE, rotate_y_list, rotate_y_nparrays
@@ -133,6 +133,9 @@ default_prim_key = "/world"
 default_prim = UsdGeom.Xform.Define(stage, default_prim_key).GetPrim()
 stage.SetDefaultPrim(default_prim)
 
+light = UsdLux.RectLight.Define(stage, "/light")
+light.CreateHeightAttr(-1)
+
 material = UsdShade.Material.Define(stage, "/material")
 pbr_shader = UsdShade.Shader.Define(stage, "/material/PBRShader")
 pbr_shader.CreateIdAttr("UsdPreviewSurface")
@@ -188,13 +191,11 @@ if TRIM_GALAXY:
     galaxy_image_edge = GALAXY_FRACTION * galaxy_square_edge
 else:
     galaxy_image_edge = galaxy_square_edge
+circle_radius = CIRCLE_FRACTION * galaxy_image_edge
 
-galaxy_points = [
-    [galaxy_image_edge, 0, galaxy_image_edge],
-    [galaxy_image_edge, 0, -galaxy_image_edge],
-    [-galaxy_image_edge, 0, -galaxy_image_edge],
-    [-galaxy_image_edge, 0, galaxy_image_edge]
-]
+circle_points = 100
+galaxy_points = [[math.cos(2 * math.pi * i / circle_points), 0, math.sin(2 * math.pi * i / circle_points)] for i in range(circle_points)]
+
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
     galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
@@ -210,7 +211,12 @@ if TRIM_GALAXY:
 # then the corresponding USD coordinates are (s, 1-t)
 # (and vice versa, since this operation is an involution)
 # (https://openusd.org/release/spec_usdpreviewsurface.html#texture-coordinate-orientation-in-usd)
-galaxy_texcoords = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+# This is the transformation from world space -> galaxy texture space
+# We determined that the galaxy image needs a 90 degree rotation
+# and so this affine transformation accounts for that.
+# It's easier if we do this before we scale
+texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5]
+galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
@@ -219,7 +225,6 @@ if SCALE:
     galaxy_points = [tuple(c[i] for c in galaxy_points_clip) for i in range(len(galaxy_points))]
 
 galaxy_center = [0.25 * sum(p[i] for p in galaxy_points) for i in range(3)]
-circle_radius = CIRCLE_FRACTION * galaxy_image_edge
 
 galaxy_prim_key = f"{default_prim_key}/galaxy"
 galaxy_prim = stage.DefinePrim(galaxy_prim_key)
@@ -228,8 +233,8 @@ galaxy_mesh = UsdGeom.Mesh.Define(stage, galaxy_mesh_key)
 galaxy_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
 galaxy_mesh.CreatePointsAttr(galaxy_points)
 galaxy_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
-galaxy_mesh.CreateFaceVertexCountsAttr([4])
-galaxy_mesh.CreateFaceVertexIndicesAttr([0,1,2,3])
+galaxy_mesh.CreateFaceVertexCountsAttr([circle_points])
+galaxy_mesh.CreateFaceVertexIndicesAttr(list(range(circle_points)))
 
 galaxy_bottom_prim_key = f"{default_prim_key}/galaxy_bottom"
 galaxy_bottom_prim = stage.DefinePrim(galaxy_bottom_prim_key)
@@ -238,8 +243,8 @@ galaxy_bottom_mesh = UsdGeom.Mesh.Define(stage, galaxy_bottom_mesh_key)
 galaxy_bottom_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
 galaxy_bottom_mesh.CreatePointsAttr(galaxy_points)
 galaxy_bottom_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
-galaxy_bottom_mesh.CreateFaceVertexCountsAttr([4])
-galaxy_bottom_mesh.CreateFaceVertexIndicesAttr([3,2,1,0])
+galaxy_bottom_mesh.CreateFaceVertexCountsAttr([circle_points])
+galaxy_bottom_mesh.CreateFaceVertexIndicesAttr(reversed(range(circle_points)))
 
 tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying)
 tex_coords.Set(galaxy_texcoords)
