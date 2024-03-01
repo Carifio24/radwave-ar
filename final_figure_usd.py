@@ -193,10 +193,12 @@ else:
     galaxy_image_edge = galaxy_square_edge
 
 if TRIM_GALAXY:
-    circle_radius = CIRCLE_FRACTION * galaxy_image_edge * 1.01
+    circle_radius = CIRCLE_FRACTION * galaxy_image_edge * 1.02
     n_circle_points = 100
-    galaxy_points = [[circle_radius * math.cos(2 * math.pi * i / n_circle_points), 0, circle_radius * math.sin(2 * math.pi * i / n_circle_points)] for i in range(n_circle_points)]
-    face_points_count = n_circle_points
+    # Go backwards in theta for orientation purposes
+    galaxy_points = [[circle_radius * math.cos(-2 * math.pi * i / n_circle_points), 0, circle_radius * math.sin(-2 * math.pi * i / n_circle_points)] for i in range(n_circle_points)]
+    n_face_points = n_circle_points
+    texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 else:
     galaxy_points = [
         [galaxy_image_edge, 0, galaxy_image_edge],
@@ -204,7 +206,8 @@ else:
         [-galaxy_image_edge, 0, -galaxy_image_edge],
         [-galaxy_image_edge, 0, galaxy_image_edge]
     ]
-    face_points_count = 4
+    n_face_points = 4
+    texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 
 # Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
 # But now we have the MW slice image with the fadeout, so we just use different images based on the
@@ -221,8 +224,9 @@ else:
 # We determined that the galaxy image needs a 90 degree rotation
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
-texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, (0.5 / galaxy_image_edge) * x + 0.5]
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+print(galaxy_points[:5])
+print(galaxy_texcoords[:5])
 
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
@@ -241,8 +245,8 @@ galaxy_mesh = UsdGeom.Mesh.Define(stage, galaxy_mesh_key)
 galaxy_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
 galaxy_mesh.CreatePointsAttr(galaxy_points)
 galaxy_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
-galaxy_mesh.CreateFaceVertexCountsAttr([face_points_count])
-galaxy_mesh.CreateFaceVertexIndicesAttr(list(range(face_points_count)))
+galaxy_mesh.CreateFaceVertexCountsAttr([n_face_points])
+galaxy_mesh.CreateFaceVertexIndicesAttr(list(range(n_face_points)))
 
 galaxy_bottom_prim_key = f"{default_prim_key}/galaxy_bottom"
 galaxy_bottom_prim = stage.DefinePrim(galaxy_bottom_prim_key)
@@ -251,8 +255,8 @@ galaxy_bottom_mesh = UsdGeom.Mesh.Define(stage, galaxy_bottom_mesh_key)
 galaxy_bottom_mesh.CreateSubdivisionSchemeAttr().Set(UsdGeom.Tokens.none)
 galaxy_bottom_mesh.CreatePointsAttr(galaxy_points)
 galaxy_bottom_mesh.CreateExtentAttr([(-galaxy_image_edge, 0, -galaxy_image_edge), (galaxy_image_edge, 0, galaxy_image_edge)])
-galaxy_bottom_mesh.CreateFaceVertexCountsAttr([face_points_count])
-galaxy_bottom_mesh.CreateFaceVertexIndicesAttr(reversed(range(face_points_count)))
+galaxy_bottom_mesh.CreateFaceVertexCountsAttr([n_face_points])
+galaxy_bottom_mesh.CreateFaceVertexIndicesAttr(reversed(range(n_face_points)))
 
 tex_coords = UsdGeom.PrimvarsAPI(galaxy_mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying)
 tex_coords.Set(galaxy_texcoords)
