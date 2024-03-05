@@ -11,10 +11,13 @@ from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FIL
 SCALE = True 
 CLIP_SIZE = 30
 TRIM_GALAXY = True
-GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
+CIRCLE = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
+
+GALAXY_FRACTION = 0.13 if CIRCLE else 0.1
+USE_CIRCLE = CIRCLE and TRIM_GALAXY
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -192,7 +195,7 @@ if TRIM_GALAXY:
 else:
     galaxy_image_edge = galaxy_square_edge
 
-if TRIM_GALAXY:
+if USE_CIRCLE:
     circle_radius = CIRCLE_FRACTION * galaxy_image_edge * 1.02
     n_circle_points = 100
     # Go backwards in theta for orientation purposes
@@ -225,8 +228,6 @@ else:
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
-print(galaxy_points[:5])
-print(galaxy_texcoords[:5])
 
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
@@ -278,7 +279,7 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if TRIM_GALAXY else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")

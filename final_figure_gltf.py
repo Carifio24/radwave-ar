@@ -15,8 +15,11 @@ from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS,
 SCALE = True 
 TRIM_GALAXY = True 
 CLIP_SIZE = 1
-GALAXY_FRACTION = 0.13
+CIRCLE = False 
 GAUSSIAN_POINTS = 0
+
+GALAXY_FRACTION = 0.13 if CIRCLE else 0.1
+USE_CIRCLE = CIRCLE and TRIM_GALAXY
 
 
 # Note that there are occasionally some funky coordinate things throughout
@@ -371,7 +374,7 @@ galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-galaxy_image_filename = "milky_way_circle.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if TRIM_GALAXY else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
