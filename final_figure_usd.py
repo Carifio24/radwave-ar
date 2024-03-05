@@ -11,10 +11,13 @@ from common import BEST_FIT_FILEPATH, N_BEST_FIT_POINTS, get_bounds, CLUSTER_FIL
 SCALE = True 
 CLIP_SIZE = 30
 TRIM_GALAXY = True
-GALAXY_FRACTION = 0.13
 GAUSSIAN_POINTS = 0
+CIRCLE = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
+
+GALAXY_FRACTION = 0.13 if CIRCLE else 0.1
+USE_CIRCLE = CIRCLE and TRIM_GALAXY
 
 sigma_val = 15 / math.sqrt(3)
 if SCALE:
@@ -192,7 +195,7 @@ if TRIM_GALAXY:
 else:
     galaxy_image_edge = galaxy_square_edge
 
-if TRIM_GALAXY:
+if USE_CIRCLE:
     circle_radius = CIRCLE_FRACTION * galaxy_image_edge * 1.02
     n_circle_points = 100
     # Go backwards in theta for orientation purposes
@@ -225,8 +228,6 @@ else:
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
-print(galaxy_points[:5])
-print(galaxy_texcoords[:5])
 
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
