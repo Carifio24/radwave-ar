@@ -15,6 +15,7 @@ GAUSSIAN_POINTS = 0
 CIRCLE = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
+SQUARE_FRACTION = 1220 / 1417
 
 GALAXY_FRACTION = 0.13 if CIRCLE else 0.1
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
@@ -203,11 +204,12 @@ if USE_CIRCLE:
     n_face_points = n_circle_points
     texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 else:
+    galaxy_mesh_edge = SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
     galaxy_points = [
-        [galaxy_image_edge, 0, galaxy_image_edge],
-        [galaxy_image_edge, 0, -galaxy_image_edge],
-        [-galaxy_image_edge, 0, -galaxy_image_edge],
-        [-galaxy_image_edge, 0, galaxy_image_edge]
+        [galaxy_mesh_edge, 0, galaxy_mesh_edge],
+        [galaxy_mesh_edge, 0, -galaxy_mesh_edge],
+        [-galaxy_mesh_edge, 0, -galaxy_mesh_edge],
+        [-galaxy_mesh_edge, 0, galaxy_mesh_edge]
     ]
     n_face_points = 4
     texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
