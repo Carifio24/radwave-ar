@@ -204,7 +204,7 @@ if USE_CIRCLE:
     n_face_points = n_circle_points
     texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 else:
-    galaxy_mesh_edge = 1.005 * SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
+    galaxy_mesh_edge = SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
     galaxy_points = [
         [galaxy_mesh_edge, 0, galaxy_mesh_edge],
         [galaxy_mesh_edge, 0, -galaxy_mesh_edge],
