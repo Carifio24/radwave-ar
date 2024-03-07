@@ -15,9 +15,9 @@ GAUSSIAN_POINTS = 0
 CIRCLE = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
-SQUARE_FRACTION = 1220 / 1417
+SQUARE_FRACTION = 1144 / 1417
 
-GALAXY_FRACTION = 0.13 if CIRCLE else 0.1
+GALAXY_FRACTION = 0.13
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
 
 sigma_val = 15 / math.sqrt(3)
@@ -212,7 +212,7 @@ else:
         [-galaxy_mesh_edge, 0, galaxy_mesh_edge]
     ]
     n_face_points = 4
-    texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
+    texcoord = lambda x, z: [(-0.5 / galaxy_mesh_edge) * z + 0.5, 0.5 - (0.5 / galaxy_mesh_edge) * x]
 
 # Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
 # But now we have the MW slice image with the fadeout, so we just use different images based on the
@@ -230,6 +230,7 @@ else:
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+print(galaxy_texcoords)
 
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
@@ -285,8 +286,8 @@ galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_squ
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
-galaxy_diffuse_texture_sampler.CreateOutput("rgba", Sdf.ValueTypeNames.Float4)
-galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color4f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgba")
+galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgb")
 
 galaxy_st_input = galaxy_material.CreateInput("frame:stPrimvarName", Sdf.ValueTypeNames.Token)
 galaxy_st_input.Set("st")
