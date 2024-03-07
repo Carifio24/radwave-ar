@@ -15,7 +15,7 @@ GAUSSIAN_POINTS = 0
 CIRCLE = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
-SQUARE_FRACTION = 1144 / 1417
+SQUARE_FRACTION = 1162 / 1417
 
 GALAXY_FRACTION = 0.13
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
@@ -204,7 +204,7 @@ if USE_CIRCLE:
     n_face_points = n_circle_points
     texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 else:
-    galaxy_mesh_edge = SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
+    galaxy_mesh_edge = 1.03 * SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
     galaxy_points = [
         [galaxy_mesh_edge, 0, galaxy_mesh_edge],
         [galaxy_mesh_edge, 0, -galaxy_mesh_edge],
@@ -212,7 +212,7 @@ else:
         [-galaxy_mesh_edge, 0, galaxy_mesh_edge]
     ]
     n_face_points = 4
-    texcoord = lambda x, z: [(-0.5 / galaxy_mesh_edge) * z + 0.5, 0.5 - (0.5 / galaxy_mesh_edge) * x]
+    texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 
 # Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
 # But now we have the MW slice image with the fadeout, so we just use different images based on the
@@ -286,8 +286,8 @@ galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_squ
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
-galaxy_diffuse_texture_sampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
-galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgb")
+galaxy_diffuse_texture_sampler.CreateOutput("rgba", Sdf.ValueTypeNames.Float4)
+galaxy_pbr_shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color4f).ConnectToSource(galaxy_diffuse_texture_sampler.ConnectableAPI(), "rgba")
 
 galaxy_st_input = galaxy_material.CreateInput("frame:stPrimvarName", Sdf.ValueTypeNames.Token)
 galaxy_st_input.Set("st")
