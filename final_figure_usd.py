@@ -13,6 +13,7 @@ CLIP_SIZE = 30
 TRIM_GALAXY = True
 GAUSSIAN_POINTS = 0
 CIRCLE = False
+FADE_OUT = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 CIRCLE_FRACTION = 1144 / 1417
 SQUARE_FRACTION = 1162 / 1417
@@ -204,7 +205,10 @@ if USE_CIRCLE:
     n_face_points = n_circle_points
     texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
 else:
-    galaxy_mesh_edge = 1.03 * SQUARE_FRACTION * galaxy_image_edge if TRIM_GALAXY else galaxy_image_edge
+    if TRIM_GALAXY and FADE_OUT:
+        galaxy_mesh_edge = 1.03 * SQUARE_FRACTION * galaxy_image_edge
+    else:
+        galaxy_mesh_edge = galaxy_image_edge
     galaxy_points = [
         [galaxy_mesh_edge, 0, galaxy_mesh_edge],
         [galaxy_mesh_edge, 0, -galaxy_mesh_edge],
@@ -212,7 +216,14 @@ else:
         [-galaxy_mesh_edge, 0, galaxy_mesh_edge]
     ]
     n_face_points = 4
-    texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
+    if FADE_OUT:
+        texcoord = lambda x, z: [(-0.5 / galaxy_image_edge) * z + 0.5, 0.5 - (0.5 / galaxy_image_edge) * x]
+    else:
+        texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, 0.5 - (0.5 / galaxy_square_edge) * x]
+
+shift_point = [shift, 0, 0]
+if TRIM_GALAXY:
+    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 # Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
 # But now we have the MW slice image with the fadeout, so we just use different images based on the
@@ -230,11 +241,6 @@ else:
 # and so this affine transformation accounts for that.
 # It's easier if we do this before we scale
 galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
-print(galaxy_texcoords)
-
-shift_point = [shift, 0, 0]
-if TRIM_GALAXY:
-    galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
@@ -282,7 +288,7 @@ galaxy_st_reader.CreateIdAttr("UsdPrimvarReader_float2")
 
 galaxy_diffuse_texture_sampler = UsdShade.Shader.Define(stage, f"{galaxy_material_key}/diffuseTexture")
 galaxy_diffuse_texture_sampler.CreateIdAttr("UsdUVTexture")
-galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if (TRIM_GALAXY and FADE_OUT) else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_diffuse_texture_sampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(galaxy_image_path)
 galaxy_diffuse_texture_sampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(galaxy_st_reader.ConnectableAPI(), "result")
