@@ -17,6 +17,7 @@ TRIM_GALAXY = True
 CLIP_SIZE = 1
 CIRCLE = False 
 GAUSSIAN_POINTS = 0
+FADE_OUT = False
 
 GALAXY_FRACTION = 0.13
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
@@ -351,16 +352,20 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
     galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
-# Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
-# But now we have the MW slice image with the fadeout, so we just use different images based on the
-# TRIM_GALAXY flag
 # Note that the original image (and thus the slice) need a 90 degree rotation
 # so the texture coordinates reflect that
-galaxy_texcoords = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
+if TRIM_GALAXY and not FADE_OUT:
+    texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5] 
+    galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+else:
+    galaxy_texcoords = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
+print(galaxy_texcoords)
+
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
@@ -374,7 +379,7 @@ galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if (TRIM_GALAXY and FADE_OUT) else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
