@@ -9,7 +9,7 @@ from gltflib import Accessor, AccessorType, Asset, BufferTarget, BufferView, Ima
 import operator
 import struct
 
-from common import get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, rotate_y_nparrays, Y_ROTATION_ANGLE
+from common import N_BEST_FIT_POINTS, get_bounds, rotate_y_list, sample_around, N_PHASES, N_POINTS, BEST_FIT_FILEPATH, bring_into_clip, CLUSTER_FILEPATH, clip_linear_transformations, sphere_mesh, rotate_y_nparrays, Y_ROTATION_ANGLE
 
 # Overall configuration settings
 SCALE = True 
@@ -17,6 +17,8 @@ TRIM_GALAXY = True
 CLIP_SIZE = 1
 CIRCLE = False 
 GAUSSIAN_POINTS = 0
+FADE_OUT = False
+BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
 GALAXY_FRACTION = 0.13
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
@@ -67,16 +69,16 @@ def get_positions_and_translations(scale=True, clip_transforms=None):
 # NOT per-timestep translations (e.g. x(t) - x(t-dt))
 def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
     df = pd.read_csv(BEST_FIT_FILEPATH)
-    initial_phase = df[df["phase"] == 0]
+    initial_phase = df[df["phase"] == 0][::BEST_FIT_DOWNSAMPLE_FACTOR]
     initial_xyz = [-initial_phase["xc"], initial_phase["zc"] - 20.8, initial_phase["yc"]]
     initial_xyz = rotate_y_nparrays(initial_xyz, Y_ROTATION_ANGLE)
-    translations = { pt: [] for pt in range(initial_phase.shape[0]) }
+    translations = { pt: [] for pt in range(N_BEST_FIT_POINTS // BEST_FIT_DOWNSAMPLE_FACTOR) }
 
     if scale:
         initial_xyz = bring_into_clip(initial_xyz, clip_transforms)
     for phase in range(1, N_PHASES + 1):
         bf_phase = phase % 360
-        slice = df[df["phase"] == bf_phase]
+        slice = df[df["phase"] == bf_phase % 360][::BEST_FIT_DOWNSAMPLE_FACTOR]
         xyz = [slice[c].to_numpy() for c in ["xc", "zc", "yc"]]
         xyz[0] *= -1
         xyz[1] -= 20.8
@@ -84,7 +86,7 @@ def get_best_fit_positions_and_translations(scale=True, clip_transforms=None):
         if scale:
             xyz = bring_into_clip(xyz, clip_transforms)
         diffs = [c - pc for c, pc in zip(xyz, initial_xyz)]
-        for pt in range(slice.shape[0]):
+        for pt in range(N_BEST_FIT_POINTS // BEST_FIT_DOWNSAMPLE_FACTOR):
             translations[pt].append(tuple(x[pt] for x in diffs))
     
     positions = [tuple(c[i] for c in initial_xyz) for i in range(initial_phase.shape[0])]
@@ -269,7 +271,7 @@ for index, point in enumerate(positions):
     
 # Now we're going to do the same for the best-fit
 # except with larger spheres
-best_fit_radius = CLIP_SIZE * (0.001 if SCALE else 1)
+best_fit_radius = BEST_FIT_DOWNSAMPLE_FACTOR * CLIP_SIZE * (0.001 if SCALE else 1)
 bf_positions, bf_translations = get_best_fit_positions_and_translations(scale=SCALE, clip_transforms=clip_transforms)
 
 for index, point in enumerate(bf_positions):
@@ -351,16 +353,20 @@ galaxy_points = [
     [-galaxy_image_edge, 0, -galaxy_image_edge],
     [-galaxy_image_edge, 0, galaxy_image_edge]
 ]
+
 shift_point = [shift, 0, 0]
 if TRIM_GALAXY:
     galaxy_points = [[c + sc for c, sc in zip(p, shift_point)] for p in galaxy_points]
 
-# Previously we calculated the texture coordinates from what percentage of the galaxy we wanted to keep
-# But now we have the MW slice image with the fadeout, so we just use different images based on the
-# TRIM_GALAXY flag
 # Note that the original image (and thus the slice) need a 90 degree rotation
 # so the texture coordinates reflect that
-galaxy_texcoords = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
+if TRIM_GALAXY and not FADE_OUT:
+    texcoord = lambda x, z: [(-0.5 / galaxy_square_edge) * z + 0.5, (0.5 / galaxy_square_edge) * x + 0.5] 
+    galaxy_texcoords = [texcoord(p[0], p[2]) for p in galaxy_points]
+else:
+    galaxy_texcoords = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
+print(galaxy_texcoords)
+
 
 galaxy_points = rotate_y_list(galaxy_points, Y_ROTATION_ANGLE)
 if SCALE:
@@ -374,7 +380,7 @@ galaxy_point_maxes = [max([operator.itemgetter(i)(pt) for pt in galaxy_points]) 
 # We repeat the triangles with the opposite orientation so that the image will show on the bottom
 galaxy_triangles= [[0, 1, 2], [2, 3, 0], [0, 2, 1], [2, 0, 3]]
 
-galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if TRIM_GALAXY else "milkywaybar.jpg"
+galaxy_image_filename = "milky_way_circle.png" if USE_CIRCLE else "milky_way_square_fade.png" if (TRIM_GALAXY and FADE_OUT) else "milkywaybar.jpg"
 galaxy_image_path = join("images", galaxy_image_filename)
 galaxy_image = Image(uri=galaxy_image_path)
 file_resources.append(FileResource(galaxy_image_path))
