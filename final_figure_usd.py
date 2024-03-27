@@ -169,11 +169,11 @@ sun_material.CreateSurfaceOutput().ConnectToSource(sun_pbr_shader.ConnectableAPI
 # Create a sphere for each point at phase=0
 for index in range(len(point_positions)):
     positions = point_positions[index]
-    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=6, phi_resolution=8)
+    add_sphere(stage, positions, timestamps, radius, material, theta_resolution=8, phi_resolution=12)
 
 for index in range(len(best_fit_positions)):
     positions = best_fit_positions[index]
-    add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material, theta_resolution=3, phi_resolution=3)
+    add_sphere(stage, positions, timestamps, best_fit_radius, best_fit_material, theta_resolution=3, phi_resolution=4)
 
 
 sun_position = [8121.97336612, 0., 0.]
