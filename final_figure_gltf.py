@@ -20,8 +20,8 @@ GAUSSIAN_POINTS = 0
 FADE_OUT = False
 BEST_FIT_DOWNSAMPLE_FACTOR = 2
 
-GALAXY_FRACTION = 0.13
 USE_CIRCLE = CIRCLE and TRIM_GALAXY
+GALAXY_FRACTION = 0.13 if USE_CIRCLE else 0.09
 
 
 # Note that there are occasionally some funky coordinate things throughout
